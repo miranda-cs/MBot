@@ -20,17 +20,9 @@
 class Misc
 {
 public:
-	static inline std::string programVersion = "1.5.6";
-	static inline std::string latestVersion;
-
 	static bool LaunchClient(const std::string& args)
 	{
 		const std::string path = std::format("{}LeagueClient.exe", S.leaguePath);
-		if (S.noAdmin)
-		{
-			if (Utils::RunAsUser(Utils::StringToWstring(path).c_str(), Utils::StringToWstring(args).data()))
-				return true;
-		}
 		Utils::OpenUrl(path.c_str(), args.c_str(), SW_SHOWNORMAL);
 		return false;
 	}
@@ -69,97 +61,6 @@ public:
 
 		Utils::OpenUrl(std::format("{}LeagueClient.exe", S.leaguePath).c_str(),
 			std::format("--system-yaml-override=\"{}LoL Companion/system.yaml\"", S.leaguePath).c_str(), SW_SHOWNORMAL);
-	}
-
-	static void CheckVersion()
-	{
-		const std::string getLatest = cpr::Get(cpr::Url{ "https://api.github.com/repos/KebsCS/KBotExt/releases/latest" }).text;
-
-		if (getLatest.contains("API rate limit"))
-			return;
-
-		const Json::CharReaderBuilder builder;
-		const std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
-		JSONCPP_STRING err;
-		Json::Value root;
-		if (reader->parse(getLatest.c_str(), getLatest.c_str() + static_cast<int>(getLatest.length()), &root, &err))
-		{
-			std::string latestTag = root["tag_name"].asString();
-			latestVersion = latestTag;
-
-			const std::vector<std::string> latestNameSplit = Utils::StringSplit(latestTag, ".");
-			const std::vector<std::string> programVersionSplit = Utils::StringSplit(programVersion, ".");
-
-			for (size_t i = 0; i < 2; i++)
-			{
-				if (latestNameSplit[i] != programVersionSplit[i])
-				{
-					if (MessageBoxA(nullptr, "Open download website?", "New major version available", MB_YESNO | MB_SETFOREGROUND) == IDYES)
-					{
-						Utils::OpenUrl(L"https://github.com/KebsCS/KBotExt/releases/latest", nullptr, SW_SHOW);
-					}
-				}
-			}
-			if (latestTag != programVersion
-				&& std::ranges::find(S.ignoredVersions, latestTag) == S.ignoredVersions.end())
-			{
-				if (const auto status = MessageBoxA(nullptr, "Open download website?\nCancel to ignore this version forever",
-					"New minor update available", MB_YESNOCANCEL | MB_SETFOREGROUND); status == IDYES)
-				{
-					Utils::OpenUrl(L"https://github.com/KebsCS/KBotExt/releases/latest", nullptr, SW_SHOW);
-				}
-				else if (status == IDCANCEL)
-				{
-					S.ignoredVersions.emplace_back(latestTag);
-					Config::Save();
-				}
-			}
-		}
-	}
-
-	static void CheckPrerelease(std::string newName = "")
-	{
-		const std::string getPrerelease = cpr::Get(cpr::Url{ "https://api.github.com/repos/KebsCS/KBotExt/releases/tags/prerelease" }).text;
-
-		if (getPrerelease.contains("API rate limit"))
-			return;
-
-		const Json::CharReaderBuilder builder;
-		const std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
-		JSONCPP_STRING err;
-		Json::Value root;
-		if (reader->parse(getPrerelease.c_str(), getPrerelease.c_str() + static_cast<int>(getPrerelease.length()), &root, &err))
-		{
-			if (root.isMember("assets") && root["assets"].isArray() && !root["assets"].empty())
-			{
-				std::string updatedAt = root["assets"][0]["updated_at"].asString();
-				std::tm dateTm;
-				std::istringstream dateStream(updatedAt);
-				dateStream >> std::get_time(&dateTm, "%Y-%m-%dT%H:%M:%SZ");
-				std::time_t githubUpdatedTime = std::mktime(&dateTm);
-
-				char szExeFileName[MAX_PATH];
-				static HMODULE kernel32 = GetModuleHandleA("kernel32");
-				static auto pGetModuleFileNameA = (decltype(&GetModuleFileNameA))GetProcAddress(kernel32, "GetModuleFileNameA");
-				pGetModuleFileNameA(nullptr, szExeFileName, MAX_PATH);
-				std::string path = std::string(szExeFileName);
-
-				if (newName != "")
-					path = path.substr(0, path.find_last_of('\\') + 1) + newName;
-
-				const std::filesystem::file_time_type lastWriteTime = std::filesystem::last_write_time(path);
-				const auto systemTime = std::chrono::clock_cast<std::chrono::system_clock>(lastWriteTime);
-				const std::time_t localUpdatedTime = std::chrono::system_clock::to_time_t(systemTime);
-
-				if (githubUpdatedTime > localUpdatedTime)
-				{
-					if (MessageBoxA(nullptr, "Open download website?", "New prerelease available", MB_YESNO | MB_SETFOREGROUND) == IDYES)
-					{
-						Utils::OpenUrl(L"https://github.com/KebsCS/KBotExt/releases/tag/prerelease", nullptr, SW_SHOW);
-					}
-				}
-			}
-		}
 	}
 
 	static std::string GetCurrentPatch()

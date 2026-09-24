@@ -1,12 +1,38 @@
 $ErrorActionPreference = "Stop"
 
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$SolutionPath = Join-Path $ProjectRoot "KBotExt.sln"
+$SolutionPath = Join-Path $ProjectRoot "MBot.sln"
 $OutputPath = Join-Path $ProjectRoot "x64"
+$IntermediatePath = Join-Path $ProjectRoot "MBot\x64"
 $VsWherePath = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
 
+function Clear-BuildDirectory {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ExpectedRelativePath
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return
+    }
+
+    $ResolvedProjectRoot = (Resolve-Path -LiteralPath $ProjectRoot).Path
+    $ResolvedPath = (Resolve-Path -LiteralPath $Path).Path
+    $ExpectedPath = [System.IO.Path]::GetFullPath((Join-Path $ResolvedProjectRoot $ExpectedRelativePath))
+
+    if ($ResolvedPath -ne $ExpectedPath) {
+        throw "Refusing to clean unexpected path: $ResolvedPath"
+    }
+
+    Write-Host "Cleaning output folder: $ResolvedPath"
+    Remove-Item -LiteralPath $ResolvedPath -Recurse -Force
+}
+
 try {
-    Write-Host "KBotExt - Release x64 build" -ForegroundColor Cyan
+    Write-Host "MBot - Release x64 build" -ForegroundColor Cyan
     Write-Host ""
 
     if (-not (Test-Path -LiteralPath $SolutionPath)) {
@@ -17,10 +43,8 @@ try {
         throw "vswhere.exe not found: $VsWherePath"
     }
 
-    if (Test-Path -LiteralPath $OutputPath) {
-        Write-Host "Cleaning output folder: $OutputPath"
-        Remove-Item -LiteralPath $OutputPath -Recurse -Force
-    }
+    Clear-BuildDirectory -Path $OutputPath -ExpectedRelativePath "x64"
+    Clear-BuildDirectory -Path $IntermediatePath -ExpectedRelativePath "MBot\x64"
 
     $VisualStudioPath = & $VsWherePath `
         -latest `
@@ -46,7 +70,7 @@ try {
         throw "Build failed with exit code $LASTEXITCODE."
     }
 
-    $ExePath = Join-Path $ProjectRoot "x64\Release\KBotExt.exe"
+    $ExePath = Join-Path $ProjectRoot "x64\Release\MBot.exe"
     Write-Host ""
     Write-Host "Build completed successfully." -ForegroundColor Green
     Write-Host "Executable: $ExePath"

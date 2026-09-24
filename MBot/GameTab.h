@@ -34,6 +34,18 @@ public:
 
 			ImGui::SameLine();
 
+			if (ImGui::Button("Dodge"))
+			{
+				const std::string result = LCU::Request(
+					"POST",
+					R"(https://127.0.0.1/lol-login/v1/session/invoke?destination=lcdsServiceProxy&method=call&args=["","teambuilder-draft","quitV2",""])",
+					"");
+				if (result.find("errorCode") != std::string::npos)
+					MessageBoxA(nullptr, result.c_str(), "Dodge failed", MB_OK);
+			}
+
+			ImGui::SameLine();
+
 			ImGui::SetNextItemWidth(static_cast<float>(S.Window.width / 6));
 			if (ImGui::BeginCombo("##comboMultiSearch", selectedMultiSearch, 0))
 			{
@@ -52,31 +64,6 @@ public:
 			ImGui::Separator();
 
 			ImGui::Checkbox("Auto accept", &S.gameTab.autoAcceptEnabled);
-
-			ImGui::Separator();
-
-			//ImGui::Columns(2, 0, false);
-
-			ImGui::Text("Instant message:");
-			ImGui::SameLine();
-			static char bufInstantMessage[500];
-			std::ranges::copy(S.gameTab.instantMessage, bufInstantMessage);
-			ImGui::SetNextItemWidth(static_cast<float>(S.Window.width / 6));
-			ImGui::InputText("##inputInstantMessage", bufInstantMessage, IM_ARRAYSIZE(bufInstantMessage));
-			S.gameTab.instantMessage = bufInstantMessage;
-
-			ImGui::SameLine();
-			ImGui::SetNextItemWidth(static_cast<float>(S.Window.width / 7));
-			ImGui::SliderInt("Delay##sliderInstantMessageDelay", &S.gameTab.instantMessageDelay, 0, 10000, "%d ms");
-			ImGui::SameLine();
-
-			ImGui::SetNextItemWidth(static_cast<float>(S.Window.width / 10));
-			ImGui::SliderInt("Time(s)##sliderInstantMessageTimes", &S.gameTab.instantMessageTimes, 1, 10, "%d");
-
-			ImGui::SameLine();
-
-			ImGui::SetNextItemWidth(static_cast<float>(S.Window.width / 7));
-			ImGui::SliderInt("Delay between##sliderInstantMessageDelayTimes", &S.gameTab.instantMessageDelayTimes, 0, 4000, "%d ms");
 
 			ImGui::Separator();
 
@@ -111,7 +98,7 @@ public:
 						instalockChampsNames.emplace_back(instalockChamps[i].second);
 						if (instalockComboData.input == instalockChamps[i].second)
 						{
-							instalockComboData.index = i + 1;
+							instalockComboData.index = static_cast<int>(i + 1);
 						}
 					}
 					instalockComboData.items = instalockChampsNames;
@@ -204,7 +191,7 @@ public:
 
 						if (autobanComboData.input == champSkins[i].name)
 						{
-							autobanComboData.index = i + 1;
+							autobanComboData.index = static_cast<int>(i + 1);
 						}
 					}
 					autobanComboData.items = autobanChampsNames;
@@ -285,7 +272,7 @@ public:
 		return temp;
 	}
 
-	static void InstantMessage(const bool instantMute = false, const bool sideNotification = false)
+	static void OnChampSelectReady(const bool instantMute = false)
 	{
 		auto start = std::chrono::system_clock::now();
 		while (true)
@@ -335,7 +322,7 @@ public:
 				continue;
 			}
 
-			if (instantMute || sideNotification)
+			if (instantMute)
 			{
 				std::string champSelect = LCU::Request("GET", "/lol-champ-select/v1/session");
 				Json::Value rootCSelect;
@@ -367,55 +354,10 @@ public:
 							}
 						}
 
-						if (sideNotification)
-						{
-							if (rootCSelect["myTeam"].isArray() && !rootCSelect["myTeam"].empty())
-							{
-								std::string notification = "You are on the ";
-								if (rootCSelect["myTeam"][0]["team"].asInt() == 1)
-									notification += "Blue Side";
-								else
-									notification += "Red Side";
-								LCU::Request("POST", std::format("/lol-chat/v1/conversations/{}/messages", cid),
-									R"({"body":")" + notification + R"(","type":"celebration"})");
-							}
-						}
 					}
 				}
 			}
-
-			if (S.gameTab.instantMessage.empty())
-				return;
-
-			const std::string request = "https://127.0.0.1/lol-chat/v1/conversations/" + cid + "/messages";
-			const std::string body = R"({"type":"chat", "body":")" + std::string(S.gameTab.instantMessage) + R"("})";
-
-			std::this_thread::sleep_for(std::chrono::milliseconds(S.gameTab.instantMessageDelay));
-
-			now = std::chrono::system_clock::now();
-			int numOfSent = 0;
-			while (true)
-			{
-				for (; numOfSent < S.gameTab.instantMessageTimes; numOfSent++)
-				{
-					if (std::string error = LCU::Request("POST", request, body); error.find("errorCode") != std::string::npos)
-					{
-						break;
-					}
-					std::this_thread::sleep_for(std::chrono::milliseconds(S.gameTab.instantMessageDelayTimes));
-				}
-
-				if (numOfSent >= S.gameTab.instantMessageTimes)
-				{
-					return;
-				}
-
-				diff = now - start;
-				if (diff.count() > 10) // took 10 seconds and still not all messages sent
-				{
-					return;
-				}
-			}
+			return;
 		}
 	}
 
@@ -440,7 +382,7 @@ public:
 			if (S.gameTab.autoAcceptEnabled || (S.gameTab.autoBanEnabled && S.gameTab.autoBanId) ||
 				(S.gameTab.dodgeOnBan && S.gameTab.instalockEnabled) ||
 				(S.gameTab.instalockEnabled && S.gameTab.instalockId) ||
-				!S.gameTab.instantMessage.empty())
+				S.gameTab.instantMute)
 			{
 				Json::Value rootSearch;
 				Json::Value rootChampSelect;
@@ -500,10 +442,10 @@ public:
 					{
 						onChampSelect = false;
 
-						if (!S.gameTab.instantMessage.empty() || S.gameTab.instantMute || S.gameTab.sideNotification)
+						if (S.gameTab.instantMute)
 						{
-							std::thread instantMessageThread(&GameTab::InstantMessage, S.gameTab.instantMute, S.gameTab.sideNotification);
-							instantMessageThread.detach();
+							std::thread champSelectReadyThread(&GameTab::OnChampSelectReady, S.gameTab.instantMute);
+							champSelectReadyThread.detach();
 						}
 					}
 
@@ -547,7 +489,7 @@ public:
 												if (S.gameTab.instalockId == -1)
 												{
 													std::vector<std::pair<int, std::string>> instalockChamps = GetInstalockChamps();
-													currentPick = instalockChamps[Utils::RandomInt(0, instalockChamps.size() - 1)].first;
+													currentPick = instalockChamps[Utils::RandomInt(0, static_cast<int>(instalockChamps.size() - 1))].first;
 												}
 
 												session.SetUrl(std::format("https://127.0.0.1:{}/lol-champ-select/v1/session/actions/{}",

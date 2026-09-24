@@ -3,7 +3,6 @@
 #include <string>
 #include <fstream>
 #include <filesystem>
-#include <vector>
 
 #include "Includes.h"
 
@@ -16,16 +15,10 @@ struct Settings
 	HWND hwnd;
 	std::string fileName = "";
 	const std::string settingsFile = "config.JSON";
-	std::string currentDebugger; // debugger path
-	std::vector<std::string> ignoredVersions;
 
 	bool autoRename = false;
 	std::string leaguePath = "C:/Riot Games/League of Legends/";
-	float fontScale = 1.f;
 	bool streamProof = false;
-	bool debugger = false;
-	bool noAdmin = false;
-	bool checkPrerelease = false;
 
 	struct
 	{
@@ -62,24 +55,17 @@ struct Settings
 
 	struct
 	{
-		size_t indexFirstRole = 0;
-		size_t indexSecondRole = 0;
 		size_t indexMultiSearch = 0;
 		bool autoAcceptEnabled = false;
 		bool instalockEnabled = false;
 		bool autoBanEnabled = false;
 		int instalockId = 0;
 		int instalockDelay = 0;
-		std::string instantMessage;
-		int instantMessageDelay = 0;
-		int instantMessageTimes = 1;
-		int instantMessageDelayTimes = 0;
 		int autoBanId = 0;
 		int autoBanDelay = 0;
 		bool dodgeOnBan = false;
 		int backupId = 0;
 		bool instantMute = false;
-		bool sideNotification = false;
 	} gameTab;
 };
 
@@ -109,15 +95,11 @@ public:
 			{
 				root["autoRename"] = S.autoRename;
 				root["leaguePath"] = S.leaguePath;
-				root["debugger"] = S.debugger;
 				root["window"]["width"] = S.Window.width;
 				root["window"]["height"] = S.Window.height;
-				root["fontScale"] = S.fontScale;
 				root["loginTab"]["language"] = S.loginTab.language;
 				root["loginTab"]["leagueArgs"] = S.loginTab.leagueArgs;
 				root["streamProof"] = S.streamProof;
-				root["noAdmin"] = S.noAdmin;
-				root["checkPrerelease"] = S.checkPrerelease;
 
 				root["infoTab"]["playerName"] = S.infoTab.playerName;
 
@@ -130,30 +112,17 @@ public:
 				root["invokeTab"]["method"] = S.invokeTab.method;
 				root["invokeTab"]["args"] = S.invokeTab.args;
 
-				root["gameTab"]["indexFirstRole"] = S.gameTab.indexFirstRole;
-				root["gameTab"]["indexSecondRole"] = S.gameTab.indexSecondRole;
 				root["gameTab"]["indexMultiSearch"] = S.gameTab.indexMultiSearch;
 				root["gameTab"]["autoAcceptEnabled"] = S.gameTab.autoAcceptEnabled;
 				root["gameTab"]["instalockEnabled"] = S.gameTab.instalockEnabled;
 				root["gameTab"]["autoBanEnabled"] = S.gameTab.autoBanEnabled;
 				root["gameTab"]["instalockDelay"] = S.gameTab.instalockDelay;
 				root["gameTab"]["instalockId"] = S.gameTab.instalockId;
-				root["gameTab"]["instantMessage"] = S.gameTab.instantMessage;
-				root["gameTab"]["instantMessageDelay"] = S.gameTab.instantMessageDelay;
-				root["gameTab"]["instantMessageTimes"] = S.gameTab.instantMessageTimes;
-				root["gameTab"]["instantMessageDelayTimes"] = S.gameTab.instantMessageDelayTimes;
 				root["gameTab"]["autoBanId"] = S.gameTab.autoBanId;
 				root["gameTab"]["autoBanDelay"] = S.gameTab.autoBanDelay;
 				root["gameTab"]["dodgeOnBan"] = S.gameTab.dodgeOnBan;
 				root["gameTab"]["backupId"] = S.gameTab.backupId;
 				root["gameTab"]["instantMute"] = S.gameTab.instantMute;
-				root["gameTab"]["sideNotification"] = S.gameTab.sideNotification;
-
-				{
-					root["ignoredVersions"] = Json::Value(Json::arrayValue);
-					for (const std::string& version : S.ignoredVersions)
-						root["ignoredVersions"].append(version);
-				}
 
 				if (!root.toStyledString().empty())
 				{
@@ -180,24 +149,16 @@ public:
 					S.autoRename = t.asBool();
 				if (auto t = root["leaguePath"]; !t.empty())
 					S.leaguePath = t.asString();
-				if (auto t = root["debugger"]; !t.empty())
-					S.debugger = t.asBool();
 				if (auto t = root["window"]["width"]; !t.empty())
 					S.Window.width = t.asInt();
 				if (auto t = root["window"]["height"]; !t.empty())
 					S.Window.height = t.asInt();
-				if (auto t = root["fontScale"]; !t.empty())
-					S.fontScale = t.asFloat();
 				if (auto t = root["loginTab"]["language"]; !t.empty())
 					S.loginTab.language = t.asString();
 				if (auto t = root["loginTab"]["leagueArgs"]; !t.empty())
 					S.loginTab.leagueArgs = t.asString();
 				if (auto t = root["streamProof"]; !t.empty())
 					S.streamProof = t.asBool();
-				if (auto t = root["noAdmin"]; !t.empty())
-					S.noAdmin = t.asBool();
-				if (auto t = root["checkPrerelease"]; !t.empty())
-					S.checkPrerelease = t.asBool();
 
 				if (auto t = root["infoTab"]["playerName"]; !t.empty())
 					S.infoTab.playerName = t.asString();
@@ -220,10 +181,6 @@ public:
 				if (auto t = root["invokeTab"]["args"]; !t.empty())
 					S.invokeTab.args = t.asString();
 
-				if (auto t = root["gameTab"]["indexFirstRole"]; !t.empty())
-					S.gameTab.indexFirstRole = t.asUInt();
-				if (auto t = root["gameTab"]["indexSecondRole"]; !t.empty())
-					S.gameTab.indexSecondRole = t.asUInt();
 				if (auto t = root["gameTab"]["indexMultiSearch"]; !t.empty())
 					S.gameTab.indexMultiSearch = t.asUInt();
 				if (auto t = root["gameTab"]["autoAcceptEnabled"]; !t.empty())
@@ -236,14 +193,6 @@ public:
 					S.gameTab.instalockDelay = t.asInt();
 				if (auto t = root["gameTab"]["instalockId"]; !t.empty())
 					S.gameTab.instalockId = t.asInt();
-				if (auto t = root["gameTab"]["instantMessage"]; !t.empty())
-					S.gameTab.instantMessage = t.asString();
-				if (auto t = root["gameTab"]["instantMessageDelay"]; !t.empty())
-					S.gameTab.instantMessageDelay = t.asInt();
-				if (auto t = root["gameTab"]["instantMessageTimes"]; !t.empty())
-					S.gameTab.instantMessageTimes = t.asInt();
-				if (auto t = root["gameTab"]["instantMessageDelayTimes"]; !t.empty())
-					S.gameTab.instantMessageDelayTimes = t.asInt();
 				if (auto t = root["gameTab"]["autoBanId"]; !t.empty())
 					S.gameTab.autoBanId = t.asInt();
 				if (auto t = root["gameTab"]["autoBanDelay"]; !t.empty())
@@ -254,16 +203,6 @@ public:
 					S.gameTab.backupId = t.asInt();
 				if (auto t = root["gameTab"]["instantMute"]; !t.empty())
 					S.gameTab.instantMute = t.asBool();
-				if (auto t = root["gameTab"]["sideNotification"]; !t.empty())
-					S.gameTab.sideNotification = t.asBool();
-
-				if (root["ignoredVersions"].isArray() && !root["ignoredVersions"].empty())
-				{
-					for (const auto& i : root["ignoredVersions"])
-					{
-						S.ignoredVersions.emplace_back(i.asString());
-					}
-				}
 			}
 		}
 		file.close();

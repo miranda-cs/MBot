@@ -476,9 +476,6 @@ public:
 			ImGui::SameLine();
 			ImGui::TextWrapped("%s ID: %s", closestChampion.c_str(), closestId.c_str());
 
-			/*if (ImGui::Button("Check email of the account"))
-				result = LCU::Request("GET", "https://127.0.0.1/lol-email-verification/v1/email");*/
-
 			ImGui::Separator();
 
 			ImGui::Text("Change your Riot ID:");
@@ -502,14 +499,6 @@ public:
 					result = LCU::Request("POST", "https://127.0.0.1/lol-summoner/v1/save-alias",
 						"{\"gameName\": \"" + std::string(bufGameName) + "\", \"tagLine\": \"" + std::string(bufTagLine) + "\"}");
 				}
-			}
-
-			if (ImGui::Button("Get email"))
-			{
-				MessageBoxA(nullptr, "Login\nClick on 'My Tickets'\nCtrl+Shift+I\nCtrl+F and search for \"email\"", "Info", MB_OK | MB_SETFOREGROUND);
-
-				Utils::OpenUrl(L"https://auth.riotgames.com/authorize?redirect_uri=https://login.playersupport.riotgames.com/login_callback&client_id=player-support-zendesk&ui_locales=en-us%20en-us&response_type=code&scope=openid%20email"
-					, nullptr, SW_SHOW);
 			}
 
 			//			if (ImGui::Button("Tournament of Souls - unlock all"))

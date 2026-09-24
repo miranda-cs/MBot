@@ -2,7 +2,7 @@
 x64/
 Debug/
 Release/
-KBotExt/x64/
-KBotExt/Debug/
-KBotExt/Release/
-KBotExt/config.JSON
+MBot/x64/
+MBot/Debug/
+MBot/Release/
+MBot/config.JSON
