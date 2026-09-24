@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 #include <cpr/cpr.h>
 
 #include "Definitions.h"
@@ -8,7 +10,7 @@
 class LCU
 {
 public:
-	static inline cpr::Session session;
+	static inline std::unique_ptr<cpr::Session> session = std::make_unique<cpr::Session>();
 
 	static inline ClientInfo league;
 	static inline ClientInfo riot;

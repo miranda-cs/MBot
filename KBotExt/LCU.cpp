@@ -29,36 +29,36 @@ std::string LCU::Request(const std::string& method, const std::string& endpoint,
 
 	cpr::Response r = {};
 
-	session.SetUrl(sURL);
-	session.SetBody(body);
+	session->SetUrl(sURL);
+	session->SetBody(body);
 
 	if (const std::string upperMethod = Utils::ToUpper(method); upperMethod == "GET")
 	{
-		r = session.Get();
+		r = session->Get();
 	}
 	else if (upperMethod == "POST")
 	{
-		r = session.Post();
+		r = session->Post();
 	}
 	else if (upperMethod == "OPTIONS")
 	{
-		r = session.Options();
+		r = session->Options();
 	}
 	else if (upperMethod == "DELETE")
 	{
-		r = session.Delete();
+		r = session->Delete();
 	}
 	else if (upperMethod == "PUT")
 	{
-		r = session.Put();
+		r = session->Put();
 	}
 	else if (upperMethod == "HEAD")
 	{
-		r = session.Head();
+		r = session->Head();
 	}
 	else if (upperMethod == "PATCH")
 	{
-		r = session.Patch();
+		r = session->Patch();
 	}
 
 	return r.text;
@@ -100,10 +100,10 @@ bool LCU::SetLeagueClientInfo(const ClientInfo& info)
 
 	league.header = Auth::MakeLeagueHeader(info);
 
-	session = cpr::Session();
-	session.SetVerifySsl(false);
+	session = std::make_unique<cpr::Session>();
+	session->SetVerifySsl(false);
 
-	session.SetHeader(Utils::StringToHeader(league.header));
+	session->SetHeader(Utils::StringToHeader(league.header));
 
 	return true;
 }

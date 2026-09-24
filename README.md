@@ -1,5 +1,12 @@
 # ⚠ KBotExt is bannable by Vanguard. [Read more](https://github.com/KebsCS/KBotExt/issues/252)
 
+## Attribution
+
+This repository is based on the original KBotExt project by KebsCS:
+https://github.com/KebsCS/KBotExt
+
+Original work belongs to the original author. This version contains my own modifications.
+
 ![Example](https://i.imgur.com/aLQOwy4.png)
 
 [More screenshots](https://imgur.com/a/Z5LRbV0)
