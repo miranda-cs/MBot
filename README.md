@@ -1,4 +1,6 @@
-# ⚠ KBotExt is bannable by Vanguard. [Read more](https://github.com/KebsCS/KBotExt/issues/252)
+# ⚠ This program is bannable by Vanguard.
+
+# I will not upload releases to this repository because they may be flagged by Riot and you will get banned. You can compile and obfuscate it yourself.
 
 ## Attribution
 
@@ -6,55 +8,6 @@ This repository is based on the original KBotExt project by KebsCS:
 https://github.com/KebsCS/KBotExt
 
 Original work belongs to the original author. This version contains my own modifications.
-
-![Example](https://i.imgur.com/aLQOwy4.png)
-
-[More screenshots](https://imgur.com/a/Z5LRbV0)
-
-## Download
-- [Stable release](https://github.com/KebsCS/KBotExt/releases/latest) (You will be notified when there's a new release)
-- [Prerelease](https://github.com/KebsCS/KBotExt/releases/tag/prerelease)
-
-## Features
-* Works every patch
-* Free ARAM boost
-* Launch multiple clients
-* Language changer
-* Start any lobby/game
-* Custom bots difficulty
-* The fastest instalock, auto accept, instant message and auto ban
-* Automatically pick a secondary, or dodge if your champion is banned
-* Instantly mute everyone in champion select
-* Dodge lobbies without closing the client
-* Mass invite all friends to lobby
-* Multi-search op.gg/u.gg/poro.gg etc. with all players in a champ select (works in ranked - lobby reveal)
-* Set the best runes for your selected champion from op.gg (works even when runes aren't unlocked)
-* Shows which map side you are on, in all gamemodes
-* Create lobbies for hidden gamemodes
-* Force Jungle/Lane on Nexus Blitz
-* Set custom icon/background/status/rank/mastery/challenges visible for everyone
-* Set glitched or empty challenge badges (tokens)
-* Set invisible profile/lobby banner
-* Info of any player using his nickname or id
-* List of champions/skins with all info and ability to sort them
-* Force close the client instantly
-* Mass delete all friends sorted by folders
-* Accept or delete all friend requests
-* Check the email of any account
-* Set custom in-game minimap scale
-* Disenchant any loot you want with 1 click (mass disenchant)
-* Champion name to id lookup
-* Send any custom request to LCU, Riot Client, RTMP, Store and Ledge
-* Stream proof
-* IFEO debugger for using HTTP debuggers (Fiddler, Charles, etc.)
-* Log cleaner
-* Ban checker
-* Automatically saves your preferences
-* Unicode support and customizable window size
-* 1 click login with automated client open
-* Force client to run without admin
-* (Patched) Play any champion/skin for free (Refund exploit)
-* (Patched) Free skin and free champion (Riot Girl Tristana)
 
 ## Development
 
@@ -75,6 +28,3 @@ Original work belongs to the original author. This version contains my own modif
   4. Build the project
   5. Feel free to make a pull request with your changes :-)
 
-
-## Discord
-Feel free to ask any questions regarding this project, or league client on my [discord server](https://discord.gg/qMmPBFpj2n), although I won't be teaching you how to code there if you're a complete beginner
