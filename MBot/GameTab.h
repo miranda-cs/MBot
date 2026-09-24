@@ -36,10 +36,7 @@ public:
 
 			if (ImGui::Button("Dodge"))
 			{
-				const std::string result = LCU::Request(
-					"POST",
-					R"(https://127.0.0.1/lol-login/v1/session/invoke?destination=lcdsServiceProxy&method=call&args=["","teambuilder-draft","quitV2",""])",
-					"");
+				const std::string result = Dodge();
 				if (result.find("errorCode") != std::string::npos)
 					MessageBoxA(nullptr, result.c_str(), "Dodge failed", MB_OK);
 			}
@@ -270,6 +267,11 @@ public:
 		}
 		std::ranges::sort(temp, [](std::pair<int, std::string> a, std::pair<int, std::string> b) { return a.second < b.second; });
 		return temp;
+	}
+
+	static std::string Dodge()
+	{
+		return LCU::Request("POST", "/lol-lobby-team-builder/champ-select/v1/session/quit");
 	}
 
 	static void OnChampSelectReady(const bool instantMute = false)
@@ -535,8 +537,8 @@ public:
 											if (S.gameTab.dodgeOnBan)
 											{
 												session.SetUrl(
-													std::format("https://127.0.0.1:{}", LCU::league.port) +
-													R"(/lol-login/v1/session/invoke?destination=lcdsServiceProxy&method=call&args=["","teambuilder-draft","quitV2",""])");
+													std::format("https://127.0.0.1:{}/lol-lobby-team-builder/champ-select/v1/session/quit",
+														LCU::league.port));
 												session.SetBody("");
 												session.Post();
 											}
