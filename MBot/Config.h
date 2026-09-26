@@ -63,6 +63,7 @@ struct Settings
 		int instalockDelay = 0;
 		int autoBanId = 0;
 		int autoBanDelay = 0;
+		int backupBanId = 0;
 		bool dodgeOnBan = false;
 		int backupId = 0;
 		bool instantMute = false;
@@ -120,6 +121,7 @@ public:
 				root["gameTab"]["instalockId"] = S.gameTab.instalockId;
 				root["gameTab"]["autoBanId"] = S.gameTab.autoBanId;
 				root["gameTab"]["autoBanDelay"] = S.gameTab.autoBanDelay;
+				root["gameTab"]["backupBanId"] = S.gameTab.backupBanId;
 				root["gameTab"]["dodgeOnBan"] = S.gameTab.dodgeOnBan;
 				root["gameTab"]["backupId"] = S.gameTab.backupId;
 				root["gameTab"]["instantMute"] = S.gameTab.instantMute;
@@ -197,6 +199,8 @@ public:
 					S.gameTab.autoBanId = t.asInt();
 				if (auto t = root["gameTab"]["autoBanDelay"]; !t.empty())
 					S.gameTab.autoBanDelay = t.asInt();
+				if (auto t = root["gameTab"]["backupBanId"]; !t.empty())
+					S.gameTab.backupBanId = t.asInt();
 				if (auto t = root["gameTab"]["dodgeOnBan"]; !t.empty())
 					S.gameTab.dodgeOnBan = t.asBool();
 				if (auto t = root["gameTab"]["backupId"]; !t.empty())

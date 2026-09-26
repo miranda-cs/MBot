@@ -22,6 +22,9 @@ public:
 			if (S.gameTab.indexMultiSearch >= itemsMultiSearch.size())
 				S.gameTab.indexMultiSearch = 0;
 			const char* selectedMultiSearch = itemsMultiSearch[S.gameTab.indexMultiSearch].c_str();
+			const size_t champDataSize = champSkins.size();
+			static size_t lastChampDataSize = 0;
+			const bool champDataChanged = champDataSize != lastChampDataSize;
 
 			if (ImGui::Button("Multi-Search"))
 			{
@@ -64,14 +67,17 @@ public:
 
 			ImGui::Separator();
 
-			static bool isStillBeingFetched = true;
-			if (!champSkins.empty())
-				isStillBeingFetched = false;
+			const bool isStillBeingFetched = champSkins.empty();
 
 			static ImGui::ComboAutoSelectData instalockComboData;
+			static int lastInstalockComboId = -999999;
+			static auto lastInstalockComboRefresh = std::chrono::steady_clock::time_point{};
+			const auto now = std::chrono::steady_clock::now();
 
-			if (onOpen)
+			if ((onOpen || instalockComboData.items.empty() || lastInstalockComboId != S.gameTab.instalockId) &&
+				(onOpen || now - lastInstalockComboRefresh > std::chrono::milliseconds(1000)))
 			{
+				lastInstalockComboRefresh = now;
 				std::vector<std::pair<int, std::string>> instalockChamps = GetInstalockChamps();
 
 				if (!instalockChamps.empty())
@@ -82,12 +88,13 @@ public:
 
 					if (S.gameTab.instalockId == -1)
 					{
-						std::ranges::copy("Random", instalockComboData.input);
+						SetComboInput(instalockComboData, "Random");
+						instalockComboData.index = 0;
 					}
 					else
 					{
 						std::string selectedChamp = ChampIdToName(S.gameTab.instalockId);
-						std::ranges::copy(selectedChamp, instalockComboData.input);
+						SetComboInput(instalockComboData, selectedChamp);
 					}
 
 					for (size_t i = 0; i < instalockChamps.size(); i++)
@@ -99,6 +106,7 @@ public:
 						}
 					}
 					instalockComboData.items = instalockChampsNames;
+					lastInstalockComboId = S.gameTab.instalockId;
 				}
 			}
 
@@ -139,7 +147,7 @@ public:
 
 			static std::string chosenBackup = "Backup pick \t\t\tChosen: " + Misc::ChampIdToName(S.gameTab.backupId) + "###AnimatedBackup";
 			static int lastBackupId = 0;
-			if ((lastBackupId != S.gameTab.backupId) && !isStillBeingFetched)
+			if ((lastBackupId != S.gameTab.backupId || champDataChanged) && !isStillBeingFetched)
 			{
 				lastBackupId = S.gameTab.backupId;
 				chosenBackup = "Backup pick \t\t\tChosen: " + Misc::ChampIdToName(S.gameTab.backupId) + "###AnimatedBackup";
@@ -164,22 +172,24 @@ public:
 			ImGui::SameLine();
 
 			static ImGui::ComboAutoSelectData autobanComboData;
-			if (onOpen)
+			static int lastAutoBanComboId = -999999;
+			if (onOpen || champDataChanged || autobanComboData.items.empty() || lastAutoBanComboId != S.gameTab.autoBanId)
 			{
 				std::vector<std::string> autobanChampsNames;
 				if (!champSkins.empty())
 				{
 					autobanChampsNames.reserve(champSkins.size() + 1);
 					autobanChampsNames.emplace_back("None");
+					autobanComboData.index = 0;
 
-					if (S.gameTab.autoBanId == -1)
+					if (S.gameTab.autoBanId <= 0)
 					{
-						std::ranges::copy("None", autobanComboData.input);
+						SetComboInput(autobanComboData, "None");
 					}
 					else
 					{
 						std::string selectedChamp = ChampIdToName(S.gameTab.autoBanId);
-						std::ranges::copy(selectedChamp, autobanComboData.input);
+						SetComboInput(autobanComboData, selectedChamp);
 					}
 
 					for (size_t i = 0; i < champSkins.size(); i++)
@@ -192,6 +202,7 @@ public:
 						}
 					}
 					autobanComboData.items = autobanChampsNames;
+					lastAutoBanComboId = S.gameTab.autoBanId;
 				}
 			}
 
@@ -203,7 +214,7 @@ public:
 				{
 					if (std::string(autobanComboData.input) == "None")
 					{
-						S.gameTab.autoBanId = -1;
+						S.gameTab.autoBanId = 0;
 					}
 					else
 					{
@@ -222,9 +233,31 @@ public:
 			ImGui::SetNextItemWidth(static_cast<float>(S.Window.width / 6));
 			ImGui::SliderInt("Delay##sliderautoBanDelay", &S.gameTab.autoBanDelay, 0, 10000, "%d ms");
 
-			ImGui::SameLine();
+			static std::string chosenBackupBan = "Backup ban \t\t\tChosen: " + Misc::ChampIdToName(S.gameTab.backupBanId) + "###AnimatedBackupBan";
+			static int lastBackupBanId = 0;
+			if ((lastBackupBanId != S.gameTab.backupBanId || champDataChanged) && !isStillBeingFetched)
+			{
+				lastBackupBanId = S.gameTab.backupBanId;
+				chosenBackupBan = "Backup ban \t\t\tChosen: " + Misc::ChampIdToName(S.gameTab.backupBanId) + "###AnimatedBackupBan";
+			}
+			if (ImGui::CollapsingHeader(chosenBackupBan.c_str()))
+			{
+				ImGui::Text("None");
+				ImGui::SameLine();
+				ImGui::RadioButton("##noneBackupBan", &S.gameTab.backupBanId, 0);
+				for (const auto& [key, name, skins] : champSkins)
+				{
+					char bufchamp[128];
+					sprintf_s(bufchamp, "##SelectBackupBan%d", key);
+					ImGui::Text("%s", name.c_str());
+					ImGui::SameLine();
+					ImGui::RadioButton(bufchamp, &S.gameTab.backupBanId, key);
+				}
+			}
 
 			ImGui::Checkbox("Instant Mute", &S.gameTab.instantMute);
+
+			lastChampDataSize = champDataSize;
 
 			if (onOpen)
 				onOpen = false;
@@ -255,9 +288,9 @@ public:
 					if (i["freeToPlay"].asBool() == true || i["ownership"]["owned"].asBool() == true ||
 						(i["ownership"].isMember("xboxGPReward") && i["ownership"]["xboxGPReward"].asBool() == true))
 					{
-						std::string loadScreenPath = i["baseLoadScreenPath"].asString();
-						size_t nameStart = loadScreenPath.find("ASSETS/Characters/") + strlen("ASSETS/Characters/");
-						std::string champName = loadScreenPath.substr(nameStart, loadScreenPath.find('/', nameStart) - nameStart);
+						const std::string champName = Misc::GetChampionAliasFromLoadScreenPath(i["baseLoadScreenPath"].asString());
+						if (champName.empty() || Misc::IsJadeChampionAlias(champName))
+							continue;
 
 						std::pair champ = { i["id"].asInt(), champName };
 						temp.emplace_back(champ);
@@ -272,6 +305,38 @@ public:
 	static std::string Dodge()
 	{
 		return LCU::Request("POST", "/lol-lobby-team-builder/champ-select/v1/session/quit");
+	}
+
+	static void SetComboInput(ImGui::ComboAutoSelectData& data, const std::string& value)
+	{
+		strncpy_s(data.input, sizeof(data.input), value.c_str(), _TRUNCATE);
+	}
+
+	static bool TeamHasPickIntent(const Json::Value& champSelect, const int championId)
+	{
+		if (championId <= 0 || !champSelect["myTeam"].isArray())
+			return false;
+
+		const int localPlayerCellId = champSelect["localPlayerCellId"].asInt();
+		for (const auto& player : champSelect["myTeam"])
+		{
+			if (player["cellId"].asInt() == localPlayerCellId)
+				continue;
+			if (player["championPickIntent"].asInt() == championId)
+				return true;
+		}
+		return false;
+	}
+
+	static int GetAutoBanChampionId(const Json::Value& champSelect)
+	{
+		if (S.gameTab.autoBanId <= 0)
+			return 0;
+		if (!TeamHasPickIntent(champSelect, S.gameTab.autoBanId))
+			return S.gameTab.autoBanId;
+		if (S.gameTab.backupBanId <= 0 || TeamHasPickIntent(champSelect, S.gameTab.backupBanId))
+			return 0;
+		return S.gameTab.backupBanId;
 	}
 
 	static void OnChampSelectReady(const bool instantMute = false)
@@ -381,7 +446,7 @@ public:
 				continue;
 			}
 
-			if (S.gameTab.autoAcceptEnabled || (S.gameTab.autoBanEnabled && S.gameTab.autoBanId) ||
+			if (S.gameTab.autoAcceptEnabled || (S.gameTab.autoBanEnabled && S.gameTab.autoBanId > 0) ||
 				(S.gameTab.dodgeOnBan && S.gameTab.instalockEnabled) ||
 				(S.gameTab.instalockEnabled && S.gameTab.instalockId) ||
 				S.gameTab.instantMute)
@@ -451,7 +516,7 @@ public:
 						}
 					}
 
-					if ((S.gameTab.instalockEnabled || S.gameTab.autoBanId) && !isPicked)
+					if ((S.gameTab.instalockEnabled || (S.gameTab.autoBanEnabled && S.gameTab.autoBanId > 0)) && !isPicked)
 					{
 						// get own summid
 						session.SetUrl(std::format("https://127.0.0.1:{}/lol-login/v1/session", LCU::league.port));
@@ -506,16 +571,32 @@ public:
 											isPicked = true;
 										}
 									}
-									else if (actionType == "ban" && S.gameTab.autoBanId && S.gameTab.autoBanEnabled)
+									else if (actionType == "ban" && S.gameTab.autoBanId > 0 && S.gameTab.autoBanEnabled)
 									{
 										if (action["completed"].asBool() == false)
 										{
+											int currentBan = GetAutoBanChampionId(rootChampSelect);
+											if (!currentBan)
+												continue;
+
 											std::this_thread::sleep_for(std::chrono::milliseconds(S.gameTab.autoBanDelay));
+
+											session.SetUrl(std::format("https://127.0.0.1:{}/lol-champ-select/v1/session", LCU::league.port));
+											Json::Value latestChampSelect;
+											std::string latestChampSelectText = session.Get().text;
+											if (reader->parse(latestChampSelectText.c_str(),
+												latestChampSelectText.c_str() + static_cast<int>(latestChampSelectText.length()),
+												&latestChampSelect, &err))
+											{
+												currentBan = GetAutoBanChampionId(latestChampSelect);
+												if (!currentBan)
+													continue;
+											}
 
 											session.SetUrl(std::format("https://127.0.0.1:{}/lol-champ-select/v1/session/actions/{}",
 												LCU::league.port,
 												action["id"].asString()));
-											session.SetBody(R"({"completed":true,"championId":)" + std::to_string(S.gameTab.autoBanId) + "}");
+											session.SetBody(R"({"completed":true,"championId":)" + std::to_string(currentBan) + "}");
 											session.Patch();
 										}
 									}
@@ -870,6 +951,11 @@ public:
 
 	static std::string ChampIdToName(const int& id)
 	{
+		if (id <= 0)
+			return "None";
+		if (champSkins.empty())
+			return "No data";
+
 		for (const auto& [key, name, skins] : champSkins)
 		{
 			if (id == key)

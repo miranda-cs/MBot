@@ -1,108 +1,64 @@
 #pragma once
 
+#include <Windows.h>
+#include <wincrypt.h>
+
 #include <string>
+
+#pragma comment(lib, "Crypt32.lib")
 
 class Base64
 {
-	std::string base64_chars =
-		"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-		"abcdefghijklmnopqrstuvwxyz"
-		"0123456789+/";
-
 public:
-	static bool is_base64(const unsigned char c)
+	std::string Encode(const unsigned char* bytesToEncode, unsigned int inputLength) const
 	{
-		return isalnum(c) || c == '+' || c == '/';
+		if (!bytesToEncode || inputLength == 0)
+			return {};
+
+		const DWORD flags = CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF;
+		DWORD outputLength = 0;
+
+		// Primeiro pedimos o tamanho necessario.
+		// Assim a string ja nasce com o espaco correto e evitamos buffers fixos.
+		if (!CryptBinaryToStringA(bytesToEncode, inputLength, flags, nullptr, &outputLength))
+			return {};
+
+		std::string output(outputLength, '\0');
+
+		// A CryptoAPI do Windows faz a conversao Base64
+		if (!CryptBinaryToStringA(bytesToEncode, inputLength, flags, output.data(), &outputLength))
+			return {};
+
+		// A funcao pode contar o '\0' final no tamanho retornado.
+		// Removemos esse terminador porque std::string ja gerencia o proprio fim da string.
+		if (outputLength > 0 && output[outputLength - 1] == '\0')
+			--outputLength;
+
+		output.resize(outputLength);
+		return output;
 	}
 
-	std::string Encode(const unsigned char* bytes_to_encode, unsigned int in_len)
+	std::string Decode(const std::string& encodedString) const
 	{
-		std::string ret;
-		int i = 0;
-		unsigned char char_array_3[3];
-		unsigned char char_array_4[4];
+		if (encodedString.empty())
+			return {};
 
-		while (in_len--)
-		{
-			char_array_3[i++] = *(bytes_to_encode++);
-			if (i == 3)
-			{
-				char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
-				char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
-				char_array_4[2] = ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
-				char_array_4[3] = char_array_3[2] & 0x3f;
+		DWORD outputLength = 0;
 
-				for (i = 0; i < 4; i++)
-					ret += base64_chars[char_array_4[i]];
-				i = 0;
-			}
-		}
+		// Primeiro descobrimos quantos bytes o Base64 vai gerar.
+		if (!CryptStringToBinaryA(encodedString.c_str(), static_cast<DWORD>(encodedString.size()),
+			CRYPT_STRING_BASE64, nullptr, &outputLength, nullptr, nullptr))
+			return {};
 
-		if (i)
-		{
-			int j;
-			for (j = i; j < 3; j++)
-				char_array_3[j] = '\0';
+		std::string output(outputLength, '\0');
 
-			char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
-			char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
-			char_array_4[2] = ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
-			char_array_4[3] = char_array_3[2] & 0x3f;
+		// O resultado decodificado pode conter qualquer byte, inclusive '\0'.
+		// Por isso guardamos em std::string com tamanho conhecido, nao em string C.
+		if (!CryptStringToBinaryA(encodedString.c_str(), static_cast<DWORD>(encodedString.size()),
+			CRYPT_STRING_BASE64, reinterpret_cast<BYTE*>(output.data()), &outputLength, nullptr, nullptr))
+			return {};
 
-			for (j = 0; j < i + 1; j++)
-				ret += base64_chars[char_array_4[j]];
-
-			while (i++ < 3)
-				ret += '=';
-		}
-
-		return ret;
-	}
-
-	std::string Decode(const std::string& encoded_string)
-	{
-		size_t in_len = encoded_string.size();
-		size_t i = 0;
-		int in = 0;
-		unsigned char char_array_4[4], char_array_3[3];
-		std::string ret;
-
-		while (in_len-- && encoded_string[in] != '=' && is_base64(encoded_string[in]))
-		{
-			char_array_4[i++] = encoded_string[in];
-			in++;
-			if (i == 4)
-			{
-				for (i = 0; i < 4; i++)
-					char_array_4[i] = static_cast<unsigned char>(base64_chars.find(char_array_4[i]));
-
-				char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
-				char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
-				char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
-
-				for (i = 0; i < 3; i++)
-					ret += char_array_3[i];
-				i = 0;
-			}
-		}
-
-		if (i)
-		{
-			size_t j;
-			for (j = i; j < 4; j++)
-				char_array_4[j] = 0;
-
-			for (j = 0; j < 4; j++)
-				char_array_4[j] = static_cast<unsigned char>(base64_chars.find(char_array_4[j]));
-
-			char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
-			char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
-			char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
-
-			for (j = 0; j < i - 1; j++)
-				ret += char_array_3[j];
-		}
-
-		return ret;
+		output.resize(outputLength);
+		return output;
 	}
 };

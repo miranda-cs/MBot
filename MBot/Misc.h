@@ -3,6 +3,8 @@
 #include <fstream>
 #include <thread>
 #include <filesystem>
+#include <map>
+#include <string_view>
 #include <tlhelp32.h>
 #include "LCU.h"
 #include "Config.h"
@@ -79,56 +81,73 @@ public:
 
 	static void GetAllChampionSkins()
 	{
-		std::string getSkins = cpr::Get(cpr::Url{ "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/skins.json" }).text;
 		Json::CharReaderBuilder builder;
 		const std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
 		JSONCPP_STRING err;
 		Json::Value root;
-		if (!reader->parse(getSkins.c_str(), getSkins.c_str() + static_cast<int>(getSkins.length()), &root, &err))
+
+		for (int attempt = 0; attempt < 3; attempt++)
+		{
+			std::string getSkins = cpr::Get(cpr::Url{ "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/skins.json" }).text;
+			root.clear();
+			err.clear();
+			if (reader->parse(getSkins.c_str(), getSkins.c_str() + static_cast<int>(getSkins.length()), &root, &err) && root.isObject())
+				break;
+
+			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+		}
+		if (!root.isObject())
 			return;
 
 		std::map<std::string, Champ> champs;
 		for (const std::string& id : root.getMemberNames())
 		{
 			const Json::Value currentSkin = root[id];
+			if (!currentSkin["isBase"].asBool())
+				continue;
 
-			std::string loadScreenPath = currentSkin["loadScreenPath"].asString();
-			size_t nameStart = loadScreenPath.find("ASSETS/Characters/") + strlen("ASSETS/Characters/");
-			std::string champName = loadScreenPath.substr(nameStart, loadScreenPath.find('/', nameStart) - nameStart);
+			const std::string champName = GetChampionAliasFromLoadScreenPath(currentSkin["loadScreenPath"].asString());
+			if (champName.empty() || IsJadeChampionAlias(champName))
+				continue;
 
-			std::string name = currentSkin["name"].asString();
+			std::string champKey = id;
+			if (champKey.size() >= 3 && champKey.substr(champKey.size() - 3) == "000")
+				champKey.erase(champKey.size() - 3);
 
 			std::pair<std::string, std::string> skin;
-			if (currentSkin["isBase"].asBool() == true)
-			{
-				champs[champName].name = champName;
-				std::string champKey = id;
-				if (champKey.size() >= 3 && champKey.substr(champKey.size() - 3) == "000") {
-					champKey.erase(champKey.size() - 3);
-				}
+			champs[champName].name = champName;
+			champs[champName].key = std::stoi(champKey);
+			skin.first = id;
+			skin.second = "default";
+			champs[champName].skins.insert(champs[champName].skins.begin(), skin);
+		}
 
-				champs[champName].key = std::stoi(champKey);
-				skin.first = id;
-				skin.second = "default";
-				champs[champName].skins.insert(champs[champName].skins.begin(), skin);
+		for (const std::string& id : root.getMemberNames())
+		{
+			const Json::Value currentSkin = root[id];
+			if (currentSkin["isBase"].asBool())
+				continue;
+
+			const std::string champName = GetChampionAliasFromLoadScreenPath(currentSkin["loadScreenPath"].asString());
+			if (champName.empty() || IsJadeChampionAlias(champName) || !champs.contains(champName))
+				continue;
+
+			std::pair<std::string, std::string> skin;
+			const std::string name = currentSkin["name"].asString();
+			if (currentSkin["questSkinInfo"]) // K/DA ALL OUT Seraphine
+			{
+				for (const Json::Value skinTiers = currentSkin["questSkinInfo"]["tiers"]; const auto & skinTier : skinTiers)
+				{
+					skin.first = skinTier["id"].asString();
+					skin.second = skinTier["name"].asString();
+					champs[champName].skins.emplace_back(skin);
+				}
 			}
 			else
 			{
-				if (currentSkin["questSkinInfo"]) // K/DA ALL OUT Seraphine
-				{
-					for (const Json::Value skinTiers = currentSkin["questSkinInfo"]["tiers"]; const auto & skinTier : skinTiers)
-					{
-						skin.first = skinTier["id"].asString();
-						skin.second = skinTier["name"].asString();
-						champs[champName].skins.emplace_back(skin);
-					}
-				}
-				else
-				{
-					skin.first = id;
-					skin.second = name;
-					champs[champName].skins.emplace_back(skin);
-				}
+				skin.first = id;
+				skin.second = name;
+				champs[champName].skins.emplace_back(skin);
 			}
 		}
 
@@ -138,6 +157,26 @@ public:
 			temp.emplace_back(c.second);
 		}
 		champSkins = temp;
+	}
+
+	static bool IsJadeChampionAlias(const std::string& alias)
+	{
+		return alias.rfind("Jade_", 0) == 0;
+	}
+
+	static std::string GetChampionAliasFromLoadScreenPath(const std::string& loadScreenPath)
+	{
+		constexpr std::string_view marker = "ASSETS/Characters/";
+		const size_t nameStart = loadScreenPath.find(marker);
+		if (nameStart == std::string::npos)
+			return "";
+
+		const size_t aliasStart = nameStart + marker.size();
+		const size_t aliasEnd = loadScreenPath.find('/', aliasStart);
+		if (aliasEnd == std::string::npos)
+			return "";
+
+		return loadScreenPath.substr(aliasStart, aliasEnd - aliasStart);
 	}
 
 	static void TaskKillLeague()
