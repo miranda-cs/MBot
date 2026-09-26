@@ -9,6 +9,98 @@
 class MiscTab
 {
 public:
+	static constexpr int RiotGameNameMaxChars = 16;
+	static constexpr int RiotTagLineMaxChars = 5;
+	static constexpr size_t RiotIdInputBufferSize = 128;
+
+	static int CountUtf8Chars(const char* text)
+	{
+		int count = 0;
+		for (int i = 0; text[i] != '\0'; count++)
+		{
+			const unsigned char c = static_cast<unsigned char>(text[i]);
+			if ((c & 0x80) == 0)
+				i += 1;
+			else if ((c & 0xE0) == 0xC0 && text[i + 1] != '\0')
+				i += 2;
+			else if ((c & 0xF0) == 0xE0 && text[i + 1] != '\0' && text[i + 2] != '\0')
+				i += 3;
+			else if ((c & 0xF8) == 0xF0 && text[i + 1] != '\0' && text[i + 2] != '\0' && text[i + 3] != '\0')
+				i += 4;
+			else
+				i += 1;
+		}
+		return count;
+	}
+
+	static int ClampUtf8ToMaxChars(char* text, const int textLength, const int maxChars)
+	{
+		int charCount = 0;
+		int byteIndex = 0;
+
+		while (text[byteIndex] != '\0' && byteIndex < textLength && charCount < maxChars)
+		{
+			const unsigned char c = static_cast<unsigned char>(text[byteIndex]);
+			int charSize = 1;
+
+			if ((c & 0x80) == 0)
+				charSize = 1;
+			else if ((c & 0xE0) == 0xC0)
+				charSize = 2;
+			else if ((c & 0xF0) == 0xE0)
+				charSize = 3;
+			else if ((c & 0xF8) == 0xF0)
+				charSize = 4;
+
+			if (byteIndex + charSize > textLength)
+				break;
+
+			byteIndex += charSize;
+			charCount++;
+		}
+
+		return byteIndex;
+	}
+
+	static int LimitRiotIdInput(ImGuiInputTextCallbackData* data)
+	{
+		if (data->EventFlag != ImGuiInputTextFlags_CallbackEdit)
+			return 0;
+
+		const int maxChars = *static_cast<int*>(data->UserData);
+		const int allowedBytes = ClampUtf8ToMaxChars(data->Buf, data->BufTextLen, maxChars);
+
+		// O ImGui trabalha com buffer em bytes, mas o Riot ID tem limite em caracteres.
+		// Por isso cortamos no ultimo caractere UTF-8 completo permitido.
+		if (allowedBytes < data->BufTextLen)
+			data->DeleteChars(allowedBytes, data->BufTextLen - allowedBytes);
+
+		return 0;
+	}
+
+	static bool InputTextWithMaxChars(const char* label, char* buffer, const size_t bufferSize, int maxChars)
+	{
+		return ImGui::InputText(label, buffer, bufferSize, ImGuiInputTextFlags_CallbackEdit, LimitRiotIdInput,
+			&maxChars);
+	}
+
+	static bool CanChangeRiotId(std::string& reason)
+	{
+		const std::string eligibility = LCU::Request("GET", "/lol-summoner/v1/riot-alias-free-eligibility");
+
+		if (eligibility.find("true") != std::string::npos)
+			return true;
+
+		if (eligibility.find("false") != std::string::npos)
+			reason = "Voce nao pode trocar o Riot ID agora.";
+		else if (eligibility.find("Not connected") != std::string::npos)
+			reason = "Cliente do League nao conectado.";
+		else
+			reason = "Nao foi possivel verificar se a troca esta disponivel:\n" + eligibility;
+
+		return false;
+	}
+
 	static std::string LevenshteinDistance(std::vector<std::string> vec, std::string str2)
 	{
 		size_t max = 999;
@@ -479,27 +571,47 @@ public:
 			ImGui::Separator();
 
 			ImGui::Text("Change your Riot ID:");
-			static char bufGameName[50];
+			static char bufGameName[RiotIdInputBufferSize];
 			ImGui::SetNextItemWidth(static_cast<float>(S.Window.width / 4));
-			ImGui::InputText("##inputGameName", bufGameName, IM_ARRAYSIZE(bufGameName));
+			InputTextWithMaxChars("##inputGameName", bufGameName, IM_ARRAYSIZE(bufGameName), RiotGameNameMaxChars);
 
 			ImGui::SameLine();
 			ImGui::Text("#");
 			ImGui::SameLine();
-			static char bufTagLine[50];
+			static char bufTagLine[RiotIdInputBufferSize];
 			ImGui::SetNextItemWidth(static_cast<float>(S.Window.width / 5));
-			ImGui::InputText("##inputTagLine", bufTagLine, IM_ARRAYSIZE(bufTagLine));
+			InputTextWithMaxChars("##inputTagLine", bufTagLine, IM_ARRAYSIZE(bufTagLine), RiotTagLineMaxChars);
 
 			ImGui::SameLine();
+			const bool canSubmitRiotId = strlen(bufGameName) > 0 && strlen(bufTagLine) > 0;
+			ImGui::BeginDisabled(!canSubmitRiotId);
 			if (ImGui::Button("Change##buttonRiotID"))
 			{
-				std::string newRiotId = std::string(bufGameName) + "#" + std::string(bufTagLine);
-				if (MessageBoxA(nullptr, std::string("Your new Riot ID will be: " + newRiotId).c_str(), "Are you sure?", MB_OKCANCEL) == IDOK)
+				std::string eligibilityReason;
+				if (!CanChangeRiotId(eligibilityReason))
 				{
-					result = LCU::Request("POST", "https://127.0.0.1/lol-summoner/v1/save-alias",
-						"{\"gameName\": \"" + std::string(bufGameName) + "\", \"tagLine\": \"" + std::string(bufTagLine) + "\"}");
+					result = eligibilityReason;
+				}
+				else
+				{
+					std::string newRiotId = std::string(bufGameName) + "#" + std::string(bufTagLine);
+					if (MessageBoxA(nullptr, std::string("Your new Riot ID will be: " + newRiotId).c_str(), "Are you sure?", MB_OKCANCEL) == IDOK)
+					{
+						Json::Value body;
+						body["gameName"] = bufGameName;
+						body["tagLine"] = bufTagLine;
+
+						result = LCU::Request("POST", "/lol-summoner/v1/save-alias", body.toStyledString());
+						if (result.empty())
+							result = "Riot ID change request sent.";
+					}
 				}
 			}
+			ImGui::EndDisabled();
+
+			ImGui::TextDisabled("Game name: %d/%d | Tag: %d/%d",
+				CountUtf8Chars(bufGameName), RiotGameNameMaxChars,
+				CountUtf8Chars(bufTagLine), RiotTagLineMaxChars);
 
 			//			if (ImGui::Button("Tournament of Souls - unlock all"))
 			//			{
