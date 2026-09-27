@@ -91,35 +91,16 @@ public:
 			&maxChars);
 	}
 
-	static bool CanChangeRiotId(std::string& reason)
+	static bool CanChangeRiotId()
 	{
 		const std::string eligibility = LCU::Request("GET", "/lol-summoner/v1/riot-alias-free-eligibility");
 
-		if (eligibility.find("true") != std::string::npos)
-			return true;
-
-		if (eligibility.find("false") != std::string::npos)
-			reason = "Voce nao pode trocar o Riot ID agora.";
-		else if (eligibility.find("Not connected") != std::string::npos)
-			reason = "Cliente do League nao conectado.";
-		else
-			reason = "Nao foi possivel verificar se a troca esta disponivel:\n" + eligibility;
-
-		return false;
+		return eligibility.find("true") != std::string::npos;
 	}
 
-	static void RefreshRiotIdEligibility(RiotIdEligibilityStatus& status, std::string& reason)
+	static void RefreshRiotIdEligibility(RiotIdEligibilityStatus& status)
 	{
-		std::string failureReason;
-		if (CanChangeRiotId(failureReason))
-		{
-			status = RiotIdEligibilityStatus::Eligible;
-			reason = "Pode trocar o Riot ID.";
-			return;
-		}
-
-		status = RiotIdEligibilityStatus::Blocked;
-		reason = failureReason;
+		status = CanChangeRiotId() ? RiotIdEligibilityStatus::Eligible : RiotIdEligibilityStatus::Blocked;
 	}
 
 	static void DrawRiotIdEligibilityCircle(const RiotIdEligibilityStatus status)
@@ -205,12 +186,10 @@ public:
 		{
 			static std::string result;
 			static RiotIdEligibilityStatus riotIdEligibilityStatus = RiotIdEligibilityStatus::Unknown;
-			static std::string riotIdEligibilityReason = "Verificando se a troca esta disponivel.";
 
 			if (onOpen)
 			{
 				riotIdEligibilityStatus = RiotIdEligibilityStatus::Unknown;
-				riotIdEligibilityReason = "Verificando se a troca esta disponivel.";
 			}
 
 			// Get processes every 5 seconds
@@ -243,7 +222,6 @@ public:
 						LCU::indexLeagueProcesses = n;
 						LCU::SetLeagueClientInfo();
 						riotIdEligibilityStatus = RiotIdEligibilityStatus::Unknown;
-						riotIdEligibilityReason = "Verificando se a troca esta disponivel.";
 					}
 
 					if (is_selected)
@@ -606,15 +584,13 @@ public:
 			static char bufTagLine[RiotIdInputBufferSize];
 
 			if (riotIdEligibilityStatus == RiotIdEligibilityStatus::Unknown)
-				RefreshRiotIdEligibility(riotIdEligibilityStatus, riotIdEligibilityReason);
+				RefreshRiotIdEligibility(riotIdEligibilityStatus);
 
-			ImGui::Text("Riot ID changer available:");
+			ImGui::Text("Account eligible to change Riot ID:");
 			ImGui::SameLine();
 			DrawRiotIdEligibilityCircle(riotIdEligibilityStatus);
-			if (ImGui::IsItemHovered())
-				ImGui::SetTooltip("%s", riotIdEligibilityReason.c_str());
 			ImGui::SameLine();
-			ImGui::TextDisabled("%s", riotIdEligibilityReason.c_str());
+			ImGui::TextDisabled("%s", riotIdEligibilityStatus == RiotIdEligibilityStatus::Eligible ? "true" : "false");
 
 			const bool canEditRiotId = riotIdEligibilityStatus == RiotIdEligibilityStatus::Eligible;
 			if (!canEditRiotId)
@@ -638,12 +614,10 @@ public:
 			ImGui::BeginDisabled(!canSubmitRiotId);
 			if (ImGui::Button("Change##buttonRiotID"))
 			{
-				std::string eligibilityReason;
-				if (!CanChangeRiotId(eligibilityReason))
+				if (!CanChangeRiotId())
 				{
 					riotIdEligibilityStatus = RiotIdEligibilityStatus::Blocked;
-					riotIdEligibilityReason = eligibilityReason;
-					result = eligibilityReason;
+					result = "Account is not eligible to change Riot ID.";
 				}
 				else
 				{
