@@ -29,42 +29,6 @@ public:
 		return false;
 	}
 
-	static void LaunchLegacyClient()
-	{
-		if (!std::filesystem::exists(std::format("{}LoL Companion", S.leaguePath)))
-		{
-			std::filesystem::create_directory(std::format("{}LoL Companion", S.leaguePath));
-		}
-		if (!std::filesystem::exists(std::format("{}LoL Companion/system.yaml", S.leaguePath)))
-		{
-			std::ifstream infile(std::format("{}system.yaml", S.leaguePath));
-			std::ofstream outfile(std::format("{}LoL Companion/system.yaml", S.leaguePath));
-			std::string content;
-
-			std::string temp;
-			while (std::getline(infile, temp))
-				content += temp + "\n";
-
-			infile.close();
-			size_t pos = content.find("riotclient:");
-			content = content.substr(0, pos + 11);
-
-			outfile << content;
-			outfile.close();
-		}
-
-		if (FindWindowA("RCLIENT", "League of Legends"))
-		{
-			LCU::Request("POST", "https://127.0.0.1/process-control/v1/process/quit");
-
-			// wait for client to close (maybe there's a better method of doing that)
-			std::this_thread::sleep_for(std::chrono::milliseconds(4500));
-		}
-
-		Utils::OpenUrl(std::format("{}LeagueClient.exe", S.leaguePath).c_str(),
-			std::format("--system-yaml-override=\"{}LoL Companion/system.yaml\"", S.leaguePath).c_str(), SW_SHOWNORMAL);
-	}
-
 	static std::string GetCurrentPatch()
 	{
 		const std::string result = cpr::Get(cpr::Url{ "http://ddragon.leagueoflegends.com/api/versions.json" }).text;

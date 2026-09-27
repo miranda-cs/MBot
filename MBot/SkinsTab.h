@@ -22,8 +22,6 @@ public:
 			ImGui::RadioButton("Alphabetically", &iSort, 0);
 			ImGui::SameLine();
 			ImGui::RadioButton("Purchase date", &iSort, 1);
-			ImGui::SameLine();
-			ImGui::RadioButton("ID", &iSort, 2);
 
 			if (bOnOpen)
 			{
@@ -112,12 +110,6 @@ public:
 						return mktime(&lhs.purchaseDate) < mktime(&rhs.purchaseDate);
 						});
 					break;
-					// id
-				case 2:
-					std::ranges::sort(ownedSkins, [](const Skin& lhs, const Skin& rhs) {
-						return lhs.itemId < rhs.itemId;
-						});
-					break;
 				default:;
 				}
 			}
@@ -154,12 +146,11 @@ public:
 				char input[512];
 				strcpy_s(input, std::format(R"(name: {}
 inventoryType: {}
-itemId: {}
 ownershipType: {}
 isVintage: {}
 purchaseDate: {}
 quantity: {}
-uuid: {})", name, inventoryType, itemId, ownershipType, isVintage, timeBuff, quantity, uuid).c_str());
+uuid: {})", name, inventoryType, ownershipType, isVintage, timeBuff, quantity, uuid).c_str());
 				ImGui::PushID(inputId.c_str());
 				ImGui::InputTextMultiline("", input, IM_ARRAYSIZE(input), ImVec2(ImGui::GetWindowSize().x, 0), ImGuiInputTextFlags_ReadOnly);
 				ImGui::PopID();

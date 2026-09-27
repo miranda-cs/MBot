@@ -13,6 +13,13 @@ public:
 	static constexpr int RiotTagLineMaxChars = 5;
 	static constexpr size_t RiotIdInputBufferSize = 128;
 
+	enum class RiotIdEligibilityStatus
+	{
+		Unknown,
+		Eligible,
+		Blocked
+	};
+
 	static int CountUtf8Chars(const char* text)
 	{
 		int count = 0;
@@ -101,6 +108,33 @@ public:
 		return false;
 	}
 
+	static void RefreshRiotIdEligibility(RiotIdEligibilityStatus& status, std::string& reason)
+	{
+		std::string failureReason;
+		if (CanChangeRiotId(failureReason))
+		{
+			status = RiotIdEligibilityStatus::Eligible;
+			reason = "Pode trocar o Riot ID.";
+			return;
+		}
+
+		status = RiotIdEligibilityStatus::Blocked;
+		reason = failureReason;
+	}
+
+	static void DrawRiotIdEligibilityCircle(const RiotIdEligibilityStatus status)
+	{
+		const bool eligible = status == RiotIdEligibilityStatus::Eligible;
+		const ImVec4 color = eligible ? ImVec4(0.10f, 0.78f, 0.32f, 1.00f) : ImVec4(0.95f, 0.20f, 0.20f, 1.00f);
+		const float diameter = ImGui::GetTextLineHeight() * 0.85f;
+		const float radius = diameter * 0.5f;
+		const ImVec2 pos = ImGui::GetCursorScreenPos();
+		const ImVec2 center(pos.x + radius, pos.y + radius);
+
+		ImGui::GetWindowDrawList()->AddCircleFilled(center, radius, ImGui::GetColorU32(color), 24);
+		ImGui::Dummy(ImVec2(diameter, diameter));
+	}
+
 	static std::string LevenshteinDistance(std::vector<std::string> vec, std::string str2)
 	{
 		size_t max = 999;
@@ -170,6 +204,14 @@ public:
 		if (ImGui::BeginTabItem("Misc"))
 		{
 			static std::string result;
+			static RiotIdEligibilityStatus riotIdEligibilityStatus = RiotIdEligibilityStatus::Unknown;
+			static std::string riotIdEligibilityReason = "Verificando se a troca esta disponivel.";
+
+			if (onOpen)
+			{
+				riotIdEligibilityStatus = RiotIdEligibilityStatus::Unknown;
+				riotIdEligibilityReason = "Verificando se a troca esta disponivel.";
+			}
 
 			// Get processes every 5 seconds
 			static auto timeBefore = std::chrono::high_resolution_clock::now();
@@ -200,6 +242,8 @@ public:
 					{
 						LCU::indexLeagueProcesses = n;
 						LCU::SetLeagueClientInfo();
+						riotIdEligibilityStatus = RiotIdEligibilityStatus::Unknown;
+						riotIdEligibilityReason = "Verificando se a troca esta disponivel.";
 					}
 
 					if (is_selected)
@@ -233,18 +277,6 @@ public:
 			}
 
 			ImGui::NextColumn();
-
-			if (ImGui::Button("Launch legacy client"))
-			{
-				if (!std::filesystem::exists(S.leaguePath))
-				{
-					result = "Invalid path, change it in Settings tab";
-				}
-				else
-				{
-					Misc::LaunchLegacyClient();
-				}
-			}
 
 			if (ImGui::Button("Close client"))
 				result = LCU::Request("POST", "https://127.0.0.1/process-control/v1/process/quit", "");
@@ -570,15 +602,34 @@ public:
 
 			ImGui::Separator();
 
-			ImGui::Text("Change your Riot ID:");
 			static char bufGameName[RiotIdInputBufferSize];
+			static char bufTagLine[RiotIdInputBufferSize];
+
+			if (riotIdEligibilityStatus == RiotIdEligibilityStatus::Unknown)
+				RefreshRiotIdEligibility(riotIdEligibilityStatus, riotIdEligibilityReason);
+
+			ImGui::Text("Riot ID changer available:");
+			ImGui::SameLine();
+			DrawRiotIdEligibilityCircle(riotIdEligibilityStatus);
+			if (ImGui::IsItemHovered())
+				ImGui::SetTooltip("%s", riotIdEligibilityReason.c_str());
+			ImGui::SameLine();
+			ImGui::TextDisabled("%s", riotIdEligibilityReason.c_str());
+
+			const bool canEditRiotId = riotIdEligibilityStatus == RiotIdEligibilityStatus::Eligible;
+			if (!canEditRiotId)
+			{
+				bufGameName[0] = '\0';
+				bufTagLine[0] = '\0';
+			}
+
+			ImGui::BeginDisabled(!canEditRiotId);
 			ImGui::SetNextItemWidth(static_cast<float>(S.Window.width / 4));
 			InputTextWithMaxChars("##inputGameName", bufGameName, IM_ARRAYSIZE(bufGameName), RiotGameNameMaxChars);
 
 			ImGui::SameLine();
 			ImGui::Text("#");
 			ImGui::SameLine();
-			static char bufTagLine[RiotIdInputBufferSize];
 			ImGui::SetNextItemWidth(static_cast<float>(S.Window.width / 5));
 			InputTextWithMaxChars("##inputTagLine", bufTagLine, IM_ARRAYSIZE(bufTagLine), RiotTagLineMaxChars);
 
@@ -590,6 +641,8 @@ public:
 				std::string eligibilityReason;
 				if (!CanChangeRiotId(eligibilityReason))
 				{
+					riotIdEligibilityStatus = RiotIdEligibilityStatus::Blocked;
+					riotIdEligibilityReason = eligibilityReason;
 					result = eligibilityReason;
 				}
 				else
@@ -607,6 +660,7 @@ public:
 					}
 				}
 			}
+			ImGui::EndDisabled();
 			ImGui::EndDisabled();
 
 			ImGui::TextDisabled("Game name: %d/%d | Tag: %d/%d",
