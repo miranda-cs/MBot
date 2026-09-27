@@ -589,8 +589,6 @@ public:
 			ImGui::Text("Account eligible to change Riot ID:");
 			ImGui::SameLine();
 			DrawRiotIdEligibilityCircle(riotIdEligibilityStatus);
-			ImGui::SameLine();
-			ImGui::TextDisabled("%s", riotIdEligibilityStatus == RiotIdEligibilityStatus::Eligible ? "true" : "false");
 
 			const bool canEditRiotId = riotIdEligibilityStatus == RiotIdEligibilityStatus::Eligible;
 			if (!canEditRiotId)
