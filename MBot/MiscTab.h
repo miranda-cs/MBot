@@ -5,69 +5,22 @@
 #include "LCU.h"
 #include "Misc.h"
 #include "Config.h"
+#include "ChampionLookup.h"
+#include "JsonUtils.h"
+#include "MiscService.h"
+#include "RiotId.h"
+#include "RiotIdService.h"
 
 class MiscTab
 {
 public:
-	static constexpr int RiotGameNameMaxChars = 16;
-	static constexpr int RiotTagLineMaxChars = 5;
 	static constexpr size_t RiotIdInputBufferSize = 128;
 
-	enum class RiotIdEligibilityStatus
+	struct CachedRiotIdEligibility
 	{
-		Unknown,
-		Eligible,
-		Blocked
+		RiotId::Eligibility value;
+		std::chrono::steady_clock::time_point checkedAt{};
 	};
-
-	static int CountUtf8Chars(const char* text)
-	{
-		int count = 0;
-		for (int i = 0; text[i] != '\0'; count++)
-		{
-			const unsigned char c = static_cast<unsigned char>(text[i]);
-			if ((c & 0x80) == 0)
-				i += 1;
-			else if ((c & 0xE0) == 0xC0 && text[i + 1] != '\0')
-				i += 2;
-			else if ((c & 0xF0) == 0xE0 && text[i + 1] != '\0' && text[i + 2] != '\0')
-				i += 3;
-			else if ((c & 0xF8) == 0xF0 && text[i + 1] != '\0' && text[i + 2] != '\0' && text[i + 3] != '\0')
-				i += 4;
-			else
-				i += 1;
-		}
-		return count;
-	}
-
-	static int ClampUtf8ToMaxChars(char* text, const int textLength, const int maxChars)
-	{
-		int charCount = 0;
-		int byteIndex = 0;
-
-		while (text[byteIndex] != '\0' && byteIndex < textLength && charCount < maxChars)
-		{
-			const unsigned char c = static_cast<unsigned char>(text[byteIndex]);
-			int charSize = 1;
-
-			if ((c & 0x80) == 0)
-				charSize = 1;
-			else if ((c & 0xE0) == 0xC0)
-				charSize = 2;
-			else if ((c & 0xF0) == 0xE0)
-				charSize = 3;
-			else if ((c & 0xF8) == 0xF0)
-				charSize = 4;
-
-			if (byteIndex + charSize > textLength)
-				break;
-
-			byteIndex += charSize;
-			charCount++;
-		}
-
-		return byteIndex;
-	}
 
 	static int LimitRiotIdInput(ImGuiInputTextCallbackData* data)
 	{
@@ -75,7 +28,7 @@ public:
 			return 0;
 
 		const int maxChars = *static_cast<int*>(data->UserData);
-		const int allowedBytes = ClampUtf8ToMaxChars(data->Buf, data->BufTextLen, maxChars);
+		const int allowedBytes = RiotId::ClampUtf8ToMaxChars(data->Buf, data->BufTextLen, maxChars);
 
 		// O ImGui trabalha com buffer em bytes, mas o Riot ID tem limite em caracteres.
 		// Por isso cortamos no ultimo caractere UTF-8 completo permitido.
@@ -91,92 +44,10 @@ public:
 			&maxChars);
 	}
 
-	static bool CanChangeRiotId()
+	static void RefreshRiotIdEligibility(CachedRiotIdEligibility& eligibility)
 	{
-		const std::string eligibility = LCU::Request("GET", "/lol-summoner/v1/riot-alias-free-eligibility");
-
-		return eligibility.find("true") != std::string::npos;
-	}
-
-	static void RefreshRiotIdEligibility(RiotIdEligibilityStatus& status)
-	{
-		status = CanChangeRiotId() ? RiotIdEligibilityStatus::Eligible : RiotIdEligibilityStatus::Blocked;
-	}
-
-	static void DrawRiotIdEligibilityCircle(const RiotIdEligibilityStatus status)
-	{
-		const bool eligible = status == RiotIdEligibilityStatus::Eligible;
-		const ImVec4 color = eligible ? ImVec4(0.10f, 0.78f, 0.32f, 1.00f) : ImVec4(0.95f, 0.20f, 0.20f, 1.00f);
-		const float diameter = ImGui::GetTextLineHeight() * 0.85f;
-		const float radius = diameter * 0.5f;
-		const ImVec2 pos = ImGui::GetCursorScreenPos();
-		const ImVec2 center(pos.x + radius, pos.y + radius);
-
-		ImGui::GetWindowDrawList()->AddCircleFilled(center, radius, ImGui::GetColorU32(color), 24);
-		ImGui::Dummy(ImVec2(diameter, diameter));
-	}
-
-	static std::string LevenshteinDistance(std::vector<std::string> vec, std::string str2)
-	{
-		size_t max = 999;
-		std::string bestMatch;
-
-		for (const std::string& str1 : vec)
-		{
-			const size_t str1Len = str1.length();
-			const size_t str2Len = str2.length();
-			size_t d[50 + 1][50 + 1];
-
-			size_t i;
-			size_t j;
-			size_t cost;
-
-			for (i = 0; i <= str1Len; i++)
-			{
-				d[i][0] = i;
-			}
-			for (j = 0; j <= str2Len; j++)
-			{
-				d[0][j] = j;
-			}
-			for (i = 1; i <= str1Len; i++)
-			{
-				for (j = 1; j <= str2Len; j++)
-				{
-					if (str1[i - 1] == str2[j - 1])
-					{
-						cost = 0;
-					}
-					else
-					{
-						cost = 1;
-					}
-					d[i][j] = (std::min)(
-						d[i - 1][j] + 1, // delete
-						(std::min)(d[i][j - 1] + 1, // insert
-							d[i - 1][j - 1] + cost) // substitution
-						);
-					if (i > 1 &&
-						j > 1 &&
-						str1[i - 1] == str2[j - 2] &&
-						str1[i - 2] == str2[j - 1]
-						)
-					{
-						d[i][j] = (std::min)(
-							d[i][j],
-							d[i - 2][j - 2] + cost // transposition
-							);
-					}
-				}
-			}
-
-			if (d[str1Len][str2Len] <= max)
-			{
-				max = d[str1Len][str2Len];
-				bestMatch = str1;
-			}
-		}
-		return bestMatch;
+		eligibility.value = RiotIdService::GetRiotClientEligibility();
+		eligibility.checkedAt = std::chrono::steady_clock::now();
 	}
 
 	static void Render()
@@ -185,11 +56,13 @@ public:
 		if (ImGui::BeginTabItem("Misc"))
 		{
 			static std::string result;
-			static RiotIdEligibilityStatus riotIdEligibilityStatus = RiotIdEligibilityStatus::Unknown;
+			static CachedRiotIdEligibility riotIdEligibility;
+			static int eligibilityClientPort = 0;
 
-			if (onOpen)
+			if (onOpen || eligibilityClientPort != LCU::league.port)
 			{
-				riotIdEligibilityStatus = RiotIdEligibilityStatus::Unknown;
+				riotIdEligibility = {};
+				eligibilityClientPort = LCU::league.port;
 			}
 
 			// Get processes every 5 seconds
@@ -221,7 +94,7 @@ public:
 					{
 						LCU::indexLeagueProcesses = n;
 						LCU::SetLeagueClientInfo();
-						riotIdEligibilityStatus = RiotIdEligibilityStatus::Unknown;
+						riotIdEligibility = {};
 					}
 
 					if (is_selected)
@@ -245,19 +118,12 @@ public:
 			}
 
 			if (ImGui::Button("Restart UX"))
-			{
-				result = LCU::Request("POST", "https://127.0.0.1/riotclient/kill-and-restart-ux", "");
-				if (result.find("failed") != std::string::npos)
-				{
-					if (LCU::SetLeagueClientInfo())
-						result = "Rehooked to new league client";
-				}
-			}
+				result = MiscService::RestartUx();
 
 			ImGui::NextColumn();
 
 			if (ImGui::Button("Close client"))
-				result = LCU::Request("POST", "https://127.0.0.1/process-control/v1/process/quit", "");
+				result = MiscService::CloseClient();
 
 			ImGui::Columns(1);
 
@@ -268,30 +134,7 @@ public:
 			if (ImGui::Button("Accept all friend requests"))
 			{
 				if (MessageBoxA(nullptr, "Are you sure?", "Accepting friend requests", MB_OKCANCEL) == IDOK)
-				{
-					std::string getFriends = LCU::Request("GET", "https://127.0.0.1/lol-chat/v1/friend-requests");
-
-					Json::CharReaderBuilder builder;
-					const std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
-					JSONCPP_STRING err;
-					Json::Value root;
-					if (!reader->parse(getFriends.c_str(), getFriends.c_str() + static_cast<int>(getFriends.length()), &root, &err))
-					{
-						result = "Failed to parse JSON";
-					}
-					else
-					{
-						if (root.isArray())
-						{
-							for (auto& i : root)
-							{
-								std::string req = "https://127.0.0.1/lol-chat/v1/friend-requests/" + i["pid"].asString();
-								LCU::Request("PUT", req, R"({"direction":"both"})");
-							}
-							result = "Accepted " + std::to_string(root.size()) + " friend requests";
-						}
-					}
-				}
+					result = MiscService::AcceptFriendRequests();
 			}
 
 			ImGui::NextColumn();
@@ -299,70 +142,19 @@ public:
 			if (ImGui::Button("Delete all friend requests"))
 			{
 				if (MessageBoxA(nullptr, "Are you sure?", "Deleting friend requests", MB_OKCANCEL) == IDOK)
-				{
-					std::string getFriends = LCU::Request("GET", "https://127.0.0.1/lol-chat/v1/friend-requests");
-
-					Json::CharReaderBuilder builder;
-					const std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
-					JSONCPP_STRING err;
-					Json::Value root;
-					if (!reader->parse(getFriends.c_str(), getFriends.c_str() + static_cast<int>(getFriends.length()), &root, &err))
-					{
-						result = "Failed to parse JSON";
-					}
-					else
-					{
-						if (root.isArray())
-						{
-							for (auto& i : root)
-							{
-								std::string req = "https://127.0.0.1/lol-chat/v1/friend-requests/" + i["pid"].asString();
-								LCU::Request("DELETE", req, "");
-							}
-							result = "Deleted " + std::to_string(root.size()) + " friend requests";
-						}
-					}
-				}
+					result = MiscService::DeleteFriendRequests();
 			}
 
 			ImGui::Columns(1);
 
-			static std::vector<std::pair<std::string, int>> items = { {"**Default", 0} };
+			static std::vector<MiscService::FriendGroup> items = { {"**Default", 0} };
 			static size_t item_current_idx = 0; // Here we store our selection data as an index.
-			auto combo_label = items[item_current_idx].first.c_str();
+			auto combo_label = items[item_current_idx].name.c_str();
 
 			if (ImGui::Button("Remove all friends"))
 			{
 				if (MessageBoxA(nullptr, "Are you sure?", "Removing friends", MB_OKCANCEL) == IDOK)
-				{
-					std::string getFriends = LCU::Request("GET", "https://127.0.0.1/lol-chat/v1/friends");
-
-					Json::CharReaderBuilder builder;
-					const std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
-					JSONCPP_STRING err;
-					Json::Value root;
-					if (!reader->parse(getFriends.c_str(), getFriends.c_str() + static_cast<int>(getFriends.length()), &root, &err))
-					{
-						result = "Failed to parse JSON";
-					}
-					else
-					{
-						if (root.isArray())
-						{
-							int iDeleted = 0;
-							for (auto& i : root)
-							{
-								if (i["groupId"].asInt() == items[item_current_idx].second)
-								{
-									std::string req = "https://127.0.0.1/lol-chat/v1/friends/" + i["pid"].asString();
-									LCU::Request("DELETE", req, "");
-									iDeleted++;
-								}
-							}
-							result = "Deleted " + std::to_string(iDeleted) + " friends";
-						}
-					}
-				}
+					result = MiscService::RemoveFriendsFromGroup(items[item_current_idx].id);
 			}
 			ImGui::SameLine();
 			ImGui::Text(" From folder: ");
@@ -370,29 +162,17 @@ public:
 			ImGui::SetNextItemWidth(ImGui::CalcTextSize(std::string(20, 'W').c_str(), nullptr, true).x);
 			if (ImGui::BeginCombo("##comboGroups", combo_label, 0))
 			{
-				std::string getGroups = LCU::Request("GET", "https://127.0.0.1/lol-chat/v1/friend-groups");
-				Json::CharReaderBuilder builder;
-				const std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
-				JSONCPP_STRING err;
-				Json::Value root;
-				if (reader->parse(getGroups.c_str(), getGroups.c_str() + static_cast<int>(getGroups.length()), &root, &err))
+				if (const auto groups = MiscService::GetFriendGroups(); !groups.empty())
 				{
-					if (root.isArray())
-					{
-						items.clear();
-						for (auto& i : root)
-						{
-							std::pair temp = { i["name"].asString(), i["id"].asInt() };
-							items.emplace_back(temp);
-						}
-						std::ranges::sort(items, [](std::pair<std::string, int> a, std::pair<std::string, int> b) { return a.second < b.second; });
-					}
+					items = groups;
+					if (item_current_idx >= items.size())
+						item_current_idx = 0;
 				}
 
 				for (size_t n = 0; n < items.size(); n++)
 				{
 					const bool is_selected = (item_current_idx == n);
-					if (ImGui::Selectable(items[n].first.c_str(), is_selected))
+					if (ImGui::Selectable(items[n].name.c_str(), is_selected))
 						item_current_idx = n;
 
 					if (is_selected)
@@ -400,21 +180,6 @@ public:
 				}
 				ImGui::EndCombo();
 			}
-
-			//if (ImGui::Button("Skip tutorial"))
-			//{
-			//	http->Request("POST", "https://127.0.0.1/telemetry/v1/events/new_player_experience", R"({"eventName":"hide_screen","plugin":"rcp-fe-lol-new-player-experience","screenName":"npe_tutorial_modules"})", auth->leagueHeader, "", "", auth->leaguePort);
-			//	http->Request("PUT", "https://127.0.0.1/lol-npe-tutorial-path/v1/settings", R"({"hasSeenTutorialPath":true,"hasSkippedTutorialPath":true,"shouldSeeNewPlayerExperience":true})", auth->leagueHeader, "", "", auth->leaguePort);
-			//	DELETE https://127.0.0.1:63027/lol-statstones/v1/vignette-notifications HTTP/1.1
-			//	// ?
-			//}
-
-			// Patched :(
-			//if (ImGui::Button("Free Tristana + Riot Girl skin"))
-			//	result = http->Request("POST", "https://127.0.0.1/lol-login/v1/session/invoke?destination=inventoryService&method=giftFacebookFan&args=[]", "", auth->leagueHeader, "", "", auth->leaguePort);
-
-			//ImGui::SameLine();
-			//Misc::HelpMarker("Relog after pressing the button");
 
 			ImGui::Separator();
 
@@ -425,10 +190,7 @@ public:
 			ImGui::SliderInt("##sliderMinimapScale", &minimapScale, 0, 350, "%d");
 			ImGui::SameLine();
 			if (ImGui::Button("Submit##submitMinimapScale"))
-			{
-				result = LCU::Request("PATCH", "https://127.0.0.1/lol-game-settings/v1/game-settings",
-					std::format(R"({{"HUD":{{"MinimapScale":{:.2f}}}}})", minimapScale / 33.33f));
-			}
+				result = MiscService::SetMinimapScale(minimapScale);
 
 			ImGui::Separator();
 
@@ -445,39 +207,11 @@ public:
 
 			if (ImGui::Button("Disenchant all: "))
 			{
-				Json::Value root;
-				Json::CharReaderBuilder builder;
-				const std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
-				JSONCPP_STRING err;
-				std::string getLoot = LCU::Request("GET", "https://127.0.0.1/lol-loot/v1/player-loot-map", "");
-
-				if (reader->parse(getLoot.c_str(), getLoot.c_str() + static_cast<int>(getLoot.length()), &root, &err))
+				if (MessageBoxA(nullptr, "Are you sure?", "Disenchanting loot", MB_OKCANCEL) == IDOK)
 				{
-					if (MessageBoxA(nullptr, "Are you sure?", "Disenchanting loot", MB_OKCANCEL) == IDOK)
-					{
-						int i = 0;
-
-						for (const std::string& name : root.getMemberNames())
-						{
-							if (std::regex regexStr("^" + itemsDisenchant[itemIndexDisenchant].second + "_[\\d]+"); std::regex_match(name, regexStr))
-							{
-								std::string disenchantCase = itemsDisenchant[itemIndexDisenchant].second == "STATSTONE_SHARD"
-									? "DISENCHANT"
-									: "disenchant";
-								std::string disenchantName = root[name]["type"].asString();
-
-								std::string disenchantUrl = std::format("https://127.0.0.1/lol-loot/v1/recipes/{0}_{1}/craft?repeat=1",
-									disenchantName, disenchantCase);
-								std::string disenchantBody = std::format(R"(["{}"])", name);
-								LCU::Request("POST", disenchantUrl, disenchantBody);
-								i++;
-							}
-						}
-						result = std::format("Disenchanted {0} {1}", std::to_string(i), itemsDisenchant[itemIndexDisenchant].first);
-					}
+					result = MiscService::DisenchantAll(itemsDisenchant[itemIndexDisenchant].second,
+						itemsDisenchant[itemIndexDisenchant].first);
 				}
-				else
-					result = "Loot not found";
 			}
 
 			ImGui::SameLine();
@@ -502,53 +236,14 @@ public:
 			if (ImGui::Button("Refund last purchase"))
 			{
 				if (MessageBoxA(nullptr, "Are you sure?", "Refunding last purchase", MB_OKCANCEL) == IDOK)
-				{
-					Json::CharReaderBuilder builder;
-					const std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
-					JSONCPP_STRING err;
-					Json::Value rootPurchaseHistory;
-
-					cpr::Header storeHeader = Utils::StringToHeader(LCU::GetStoreHeader());
-
-					std::string storeUrl = LCU::Request("GET", "/lol-store/v1/getStoreUrl");
-					std::erase(storeUrl, '"');
-
-					std::string purchaseHistory = cpr::Get(cpr::Url{ storeUrl + "/storefront/v3/history/purchase" }, cpr::Header{ storeHeader }).text;
-					if (reader->parse(purchaseHistory.c_str(), purchaseHistory.c_str() + static_cast<int>(purchaseHistory.length()),
-						&rootPurchaseHistory, &err))
-					{
-						std::string accountId = rootPurchaseHistory["player"]["accountId"].asString();
-						std::string transactionId = rootPurchaseHistory["transactions"][0]["transactionId"].asString();
-						result = cpr::Post(cpr::Url{ storeUrl + "/storefront/v3/refund" }, cpr::Header{ storeHeader },
-							cpr::Body{
-								"{\"accountId\":" + accountId + R"(,"transactionId":")" + transactionId +
-								R"(","inventoryType":"CHAMPION","language":"en_US"})"
-							}).text;
-					}
-					else
-					{
-						result = purchaseHistory;
-					}
-				}
+					result = MiscService::RefundLastPurchase();
 			}
 			ImGui::SameLine();
 			ImGui::HelpMarker("Can refund anything, even loot");
 
 			ImGui::Columns(1);
 
-			// Getting closest champion name with Levenshtein distance algorithm and getting it's id
 			ImGui::Text("Champion name to ID");
-			static std::vector<std::string> champNames;
-			if (!champSkins.empty() && champNames.empty())
-			{
-				for (const auto& [key, name, skins] : champSkins)
-				{
-					champNames.emplace_back(name);
-					//std::cout << "('" << champ.name << "', " << champ.key << "), " << std::endl;
-					std::cout << name << std::endl;
-				}
-			}
-
 			static char bufChampionName[50];
 			static size_t lastSize = 0;
 			static std::string closestChampion;
@@ -564,16 +259,9 @@ public:
 			else if (lastSize != strlen(bufChampionName))
 			{
 				lastSize = strlen(bufChampionName);
-				closestChampion = LevenshteinDistance(champNames, bufChampionName);
-
-				for (const auto& [key, name, skins] : champSkins)
-				{
-					if (closestChampion == name)
-					{
-						closestId = std::to_string(key);
-						break;
-					}
-				}
+				const ChampionLookup::Result lookup = ChampionLookup::FindClosest(champSkins, bufChampionName);
+				closestChampion = lookup.name;
+				closestId = lookup.id;
 			}
 			ImGui::SameLine();
 			ImGui::TextWrapped("%s ID: %s", closestChampion.c_str(), closestId.c_str());
@@ -583,14 +271,24 @@ public:
 			static char bufGameName[RiotIdInputBufferSize];
 			static char bufTagLine[RiotIdInputBufferSize];
 
-			if (riotIdEligibilityStatus == RiotIdEligibilityStatus::Unknown)
-				RefreshRiotIdEligibility(riotIdEligibilityStatus);
+			if (riotIdEligibility.checkedAt == std::chrono::steady_clock::time_point{}
+				|| std::chrono::steady_clock::now() - riotIdEligibility.checkedAt >= std::chrono::seconds(60))
+				RefreshRiotIdEligibility(riotIdEligibility);
 
-			ImGui::Text("Account eligible to change Riot ID:");
-			ImGui::SameLine();
-			DrawRiotIdEligibilityCircle(riotIdEligibilityStatus);
+			if (riotIdEligibility.value.status == RiotId::EligibilityStatus::Eligible)
+				ImGui::TextDisabled("Nickname change available now");
+			else if (riotIdEligibility.value.status == RiotId::EligibilityStatus::Unknown)
+				ImGui::TextDisabled("Could not check nickname change availability");
+			else
+			{
+				const std::string date = RiotId::FormatLocalDateTimeWithUtcOffset(riotIdEligibility.value.eligibleAfter);
+				if (!date.empty())
+					ImGui::TextWrapped("Next nickname change available on %s", date.c_str());
+				else
+					ImGui::TextDisabled("Next nickname change date unavailable");
+			}
 
-			const bool canEditRiotId = riotIdEligibilityStatus == RiotIdEligibilityStatus::Eligible;
+			const bool canEditRiotId = riotIdEligibility.value.status == RiotId::EligibilityStatus::Eligible;
 			if (!canEditRiotId)
 			{
 				bufGameName[0] = '\0';
@@ -599,36 +297,34 @@ public:
 
 			ImGui::BeginDisabled(!canEditRiotId);
 			ImGui::SetNextItemWidth(static_cast<float>(S.Window.width / 4));
-			InputTextWithMaxChars("##inputGameName", bufGameName, IM_ARRAYSIZE(bufGameName), RiotGameNameMaxChars);
+			InputTextWithMaxChars("##inputGameName", bufGameName, IM_ARRAYSIZE(bufGameName), RiotId::GameNameMaxChars);
 
 			ImGui::SameLine();
 			ImGui::Text("#");
 			ImGui::SameLine();
 			ImGui::SetNextItemWidth(static_cast<float>(S.Window.width / 5));
-			InputTextWithMaxChars("##inputTagLine", bufTagLine, IM_ARRAYSIZE(bufTagLine), RiotTagLineMaxChars);
+			InputTextWithMaxChars("##inputTagLine", bufTagLine, IM_ARRAYSIZE(bufTagLine), RiotId::TagLineMaxChars);
 
 			ImGui::SameLine();
 			const bool canSubmitRiotId = strlen(bufGameName) > 0 && strlen(bufTagLine) > 0;
 			ImGui::BeginDisabled(!canSubmitRiotId);
 			if (ImGui::Button("Change##buttonRiotID"))
 			{
-				if (!CanChangeRiotId())
+				RefreshRiotIdEligibility(riotIdEligibility);
+				if (riotIdEligibility.value.status != RiotId::EligibilityStatus::Eligible)
 				{
-					riotIdEligibilityStatus = RiotIdEligibilityStatus::Blocked;
-					result = "Account is not eligible to change Riot ID.";
+					result = riotIdEligibility.value.status == RiotId::EligibilityStatus::Unknown
+						? "Could not check nickname change availability" : "Nickname change is not available yet";
 				}
 				else
 				{
 					std::string newRiotId = std::string(bufGameName) + "#" + std::string(bufTagLine);
 					if (MessageBoxA(nullptr, std::string("Your new Riot ID will be: " + newRiotId).c_str(), "Are you sure?", MB_OKCANCEL) == IDOK)
 					{
-						Json::Value body;
-						body["gameName"] = bufGameName;
-						body["tagLine"] = bufTagLine;
-
-						result = LCU::Request("POST", "/lol-summoner/v1/save-alias", body.toStyledString());
+						result = RiotIdService::SaveAlias(bufGameName, bufTagLine);
 						if (result.empty())
 							result = "Riot ID change request sent.";
+						RefreshRiotIdEligibility(riotIdEligibility);
 					}
 				}
 			}
@@ -636,77 +332,15 @@ public:
 			ImGui::EndDisabled();
 
 			ImGui::TextDisabled("Game name: %d/%d | Tag: %d/%d",
-				CountUtf8Chars(bufGameName), RiotGameNameMaxChars,
-				CountUtf8Chars(bufTagLine), RiotTagLineMaxChars);
+				RiotId::CountUtf8Chars(bufGameName), RiotId::GameNameMaxChars,
+				RiotId::CountUtf8Chars(bufTagLine), RiotId::TagLineMaxChars);
 
-			//			if (ImGui::Button("Tournament of Souls - unlock all"))
-			//			{
-			//				LCU::Request("POST", "/lol-marketing-preferences/v1/partition/sfm2023", R"({
-			//	"SmallConspiracyFan" : "True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True",
-			//	"SmallGwenPykeFan" : "True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True",
-			//	"SmallJhinFan" : "True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True",
-			//	"SmallSettFans" : "True,True,True,True,True,True,True,True,True,True,True,True,True,True,True",
-			//	"SmallShaco" : "True,True",
-			//	"hasNewAbility" : "False",
-			//	"hasNewFanLine" : "False",
-			//	"hasPlayedTutorial" : "True",
-			//	"hasSeenCelebration_Story" : "True",
-			//	"hasSeenLoadoutTutorial" : "True",
-			//	"hasSeenMapTutorial" : "True",
-			//	"loadout_active_e" : "2",
-			//	"loadout_active_q" : "1",
-			//	"loadout_active_r" : "2",
-			//	"loadout_active_w" : "2",
-			//	"numNodesUnlocked" : "20",
-			//	"progress" : "20"
-			//})");
-			//
-			//				Json::Value root;
-			//				Json::CharReaderBuilder builder;
-			//				const std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
-			//				JSONCPP_STRING err;
-			//				std::string getGrants = LCU::Request("GET", "/lol-rewards/v1/grants");
-			//
-			//				if (reader->parse(getGrants.c_str(), getGrants.c_str() + static_cast<int>(getGrants.length()), &root, &err))
-			//				{
-			//					if (root.isArray())
-			//					{
-			//						for (auto grant : root)
-			//						{
-			//							for (Json::Value& reward : grant["rewardGroup"]["rewards"])
-			//							{
-			//								Json::Value body;
-			//								body["rewardGroupId"] = grant["info"]["rewardGroupId"].asString();
-			//								body["selections"] = {};
-			//								body["selections"].append(reward["id"].asString());
-			//
-			//								result += LCU::Request("POST", std::format("/lol-rewards/v1/grants/{}/select", grant["info"]["id"].asString()),
-			//									body.toStyledString());
-			//							}
-			//						}
-			//					}
-			//				}
-			//			}
-			//
-			//			ImGui::SameLine();
-			//			ImGui::HelpMarker("You need reputation for this to work");
-
-			static Json::StreamWriterBuilder wBuilder;
 			static std::string sResultJson;
 			static char* cResultJson;
 
 			if (!result.empty())
 			{
-				Json::CharReaderBuilder builder;
-				const std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
-				JSONCPP_STRING err;
-				Json::Value root;
-				if (!reader->parse(result.c_str(), result.c_str() + static_cast<int>(result.length()), &root, &err))
-					sResultJson = result;
-				else
-				{
-					sResultJson = Json::writeString(wBuilder, root);
-				}
+				sResultJson = JsonUtils::FormatOrRaw(result);
 				result = "";
 			}
 

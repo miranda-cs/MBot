@@ -185,6 +185,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Auth.cpp" />
+    <ClCompile Include="ChampionLookup.cpp" />
     <ClCompile Include="DirectX.cpp" />
     <ClCompile Include="imgui\imgui.cpp" />
     <ClCompile Include="imgui\imgui_draw.cpp" />
@@ -193,14 +194,19 @@
     <ClCompile Include="imgui\imgui_impl_win32.cpp" />
     <ClCompile Include="imgui\imgui_tables.cpp" />
     <ClCompile Include="imgui\imgui_widgets.cpp" />
+    <ClCompile Include="JsonUtils.cpp" />
     <ClCompile Include="MBot.cpp" />
     <ClCompile Include="LCU.cpp" />
+    <ClCompile Include="MiscService.cpp" />
+    <ClCompile Include="RiotId.cpp" />
+    <ClCompile Include="RiotIdService.cpp" />
     <ClCompile Include="Utils.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Auth.h" />
     <ClInclude Include="base64.h" />
     <ClInclude Include="ChampsTab.h" />
+    <ClInclude Include="ChampionLookup.h" />
     <ClInclude Include="CustomTab.h" />
     <ClInclude Include="Definitions.h" />
     <ClInclude Include="DirectX.h" />
@@ -215,12 +221,16 @@
     <ClInclude Include="imgui\imstb_textedit.h" />
     <ClInclude Include="Includes.h" />
     <ClInclude Include="InfoTab.h" />
+    <ClInclude Include="JsonUtils.h" />
     <ClInclude Include="LCU.h" />
     <ClInclude Include="LoginTab.h" />
     <ClInclude Include="Misc.h" />
+    <ClInclude Include="MiscService.h" />
     <ClInclude Include="MiscTab.h" />
     <ClInclude Include="ProfileTab.h" />
     <ClInclude Include="Config.h" />
+    <ClInclude Include="RiotId.h" />
+    <ClInclude Include="RiotIdService.h" />
     <ClInclude Include="SettingsTab.h" />
     <ClInclude Include="SkinsTab.h" />
     <ClInclude Include="Utils.h" />
