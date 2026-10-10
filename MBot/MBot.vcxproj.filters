@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="Tabs">
+    <Filter Include="UI">
       <UniqueIdentifier>{7d0b8c55-703b-4c67-b79b-56f9c8dbbf02}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source Files">
@@ -19,24 +19,60 @@
     <Filter Include="League">
       <UniqueIdentifier>{888bd346-de16-4def-9ccf-4c21e22c708b}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Automation">
+      <UniqueIdentifier>{d574c580-5cc5-4801-9a33-b7e164b11726}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="App">
+      <UniqueIdentifier>{59de7fb2-56eb-45fa-adee-b2a30d8a22f6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common">
+      <UniqueIdentifier>{3231980d-77fd-4fcb-a1da-537fe6a2165e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="WebSocket">
+      <UniqueIdentifier>{719bc6d8-b467-43d4-91b7-f436dc0f47c6}</UniqueIdentifier>
+    </Filter>
     <Filter Include="imgui">
       <UniqueIdentifier>{ed321358-528e-43a8-b1aa-992806430647}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="DirectX.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="Automation\ChampSelectAutomation.cpp">
+      <Filter>Automation</Filter>
     </ClCompile>
-    <ClCompile Include="ChampionLookup.cpp">
+    <ClCompile Include="Automation\GameAutomation.cpp">
+      <Filter>Automation</Filter>
+    </ClCompile>
+    <ClCompile Include="Automation\PickOrderSwapAutomation.cpp">
+      <Filter>Automation</Filter>
+    </ClCompile>
+    <ClCompile Include="Automation\ReadyCheckAutomation.cpp">
+      <Filter>Automation</Filter>
+    </ClCompile>
+    <ClCompile Include="League\ChampionService.cpp">
       <Filter>League</Filter>
     </ClCompile>
-    <ClCompile Include="MBot.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="League\LcuHttpClient.cpp">
+      <Filter>League</Filter>
     </ClCompile>
-    <ClCompile Include="Utils.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="WebSocket\LcuWebSocket.cpp">
+      <Filter>WebSocket</Filter>
     </ClCompile>
-    <ClCompile Include="Auth.cpp">
+    <ClCompile Include="App\DirectX.cpp">
+      <Filter>App</Filter>
+    </ClCompile>
+    <ClCompile Include="App\MBot.cpp">
+      <Filter>App</Filter>
+    </ClCompile>
+    <ClCompile Include="Common\JsonUtils.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="Common\Utils.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="League\ChampionLookup.cpp">
+      <Filter>League</Filter>
+    </ClCompile>
+    <ClCompile Include="League\Auth.cpp">
       <Filter>League</Filter>
     </ClCompile>
     <ClCompile Include="imgui\imgui.cpp">
@@ -54,19 +90,16 @@
     <ClCompile Include="imgui\imgui_widgets.cpp">
       <Filter>imgui</Filter>
     </ClCompile>
-    <ClCompile Include="LCU.cpp">
+    <ClCompile Include="League\LCU.cpp">
       <Filter>League</Filter>
     </ClCompile>
-    <ClCompile Include="JsonUtils.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="MiscService.cpp">
+    <ClCompile Include="League\MiscService.cpp">
       <Filter>League</Filter>
     </ClCompile>
-    <ClCompile Include="RiotId.cpp">
+    <ClCompile Include="League\RiotId.cpp">
       <Filter>League</Filter>
     </ClCompile>
-    <ClCompile Include="RiotIdService.cpp">
+    <ClCompile Include="League\RiotIdService.cpp">
       <Filter>League</Filter>
     </ClCompile>
     <ClCompile Include="imgui\imgui_freetype.cpp">
@@ -77,37 +110,58 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="DirectX.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="Automation\ChampSelectAutomation.h">
+      <Filter>Automation</Filter>
     </ClInclude>
-    <ClInclude Include="Utils.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="Automation\GameAutomation.h">
+      <Filter>Automation</Filter>
     </ClInclude>
-    <ClInclude Include="Definitions.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="Automation\PickOrderSwapAutomation.h">
+      <Filter>Automation</Filter>
     </ClInclude>
-    <ClInclude Include="ChampionLookup.h">
+    <ClInclude Include="Automation\ReadyCheckAutomation.h">
+      <Filter>Automation</Filter>
+    </ClInclude>
+    <ClInclude Include="League\ChampionService.h">
       <Filter>League</Filter>
     </ClInclude>
-    <ClInclude Include="Includes.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="LoginTab.h">
-      <Filter>Tabs</Filter>
-    </ClInclude>
-    <ClInclude Include="GameTab.h">
-      <Filter>Tabs</Filter>
-    </ClInclude>
-    <ClInclude Include="InfoTab.h">
-      <Filter>Tabs</Filter>
-    </ClInclude>
-    <ClInclude Include="JsonUtils.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="base64.h">
+    <ClInclude Include="League\LcuHttpClient.h">
       <Filter>League</Filter>
     </ClInclude>
-    <ClInclude Include="Auth.h">
+    <ClInclude Include="WebSocket\LcuWebSocket.h">
+      <Filter>WebSocket</Filter>
+    </ClInclude>
+    <ClInclude Include="App\DirectX.h">
+      <Filter>App</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\Utils.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\Definitions.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="League\ChampionLookup.h">
+      <Filter>League</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\Includes.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\LoginTab.h">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\GameTab.h">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\InfoTab.h">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\JsonUtils.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="League\base64.h">
+      <Filter>League</Filter>
+    </ClInclude>
+    <ClInclude Include="League\Auth.h">
       <Filter>League</Filter>
     </ClInclude>
     <ClInclude Include="imgui\imconfig.h">
@@ -131,40 +185,40 @@
     <ClInclude Include="imgui\imstb_textedit.h">
       <Filter>imgui</Filter>
     </ClInclude>
-    <ClInclude Include="Misc.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="Common\Misc.h">
+      <Filter>Common</Filter>
     </ClInclude>
-    <ClInclude Include="ProfileTab.h">
-      <Filter>Tabs</Filter>
+    <ClInclude Include="UI\ProfileTab.h">
+      <Filter>UI</Filter>
     </ClInclude>
-    <ClInclude Include="CustomTab.h">
-      <Filter>Tabs</Filter>
+    <ClInclude Include="UI\CustomTab.h">
+      <Filter>UI</Filter>
     </ClInclude>
-    <ClInclude Include="SkinsTab.h">
-      <Filter>Tabs</Filter>
+    <ClInclude Include="UI\SkinsTab.h">
+      <Filter>UI</Filter>
     </ClInclude>
-    <ClInclude Include="ChampsTab.h">
-      <Filter>Tabs</Filter>
+    <ClInclude Include="UI\ChampsTab.h">
+      <Filter>UI</Filter>
     </ClInclude>
-    <ClInclude Include="SettingsTab.h">
-      <Filter>Tabs</Filter>
+    <ClInclude Include="UI\SettingsTab.h">
+      <Filter>UI</Filter>
     </ClInclude>
-    <ClInclude Include="Config.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="Common\Config.h">
+      <Filter>Common</Filter>
     </ClInclude>
-    <ClInclude Include="MiscTab.h">
-      <Filter>Tabs</Filter>
+    <ClInclude Include="UI\MiscTab.h">
+      <Filter>UI</Filter>
     </ClInclude>
-    <ClInclude Include="LCU.h">
+    <ClInclude Include="League\LCU.h">
       <Filter>League</Filter>
     </ClInclude>
-    <ClInclude Include="MiscService.h">
+    <ClInclude Include="League\MiscService.h">
       <Filter>League</Filter>
     </ClInclude>
-    <ClInclude Include="RiotId.h">
+    <ClInclude Include="League\RiotId.h">
       <Filter>League</Filter>
     </ClInclude>
-    <ClInclude Include="RiotIdService.h">
+    <ClInclude Include="League\RiotIdService.h">
       <Filter>League</Filter>
     </ClInclude>
     <ClInclude Include="imgui\imgui_freetype.h">

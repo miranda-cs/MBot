@@ -1,5 +1,7 @@
 .vs/
 x64/
+build/
+*.vcxproj.user
 Debug/
 Release/
 MBot/x64/

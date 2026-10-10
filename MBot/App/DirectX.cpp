@@ -1,5 +1,6 @@
 ﻿#include "DirectX.h"
 
+#include "Automation/GameAutomation.h"
 #include "GameTab.h"
 #include "InfoTab.h"
 #include "LoginTab.h"
@@ -47,8 +48,8 @@ bool Direct3D11Render::DirectXInit(const HWND hWnd)
 	std::thread t{ Misc::GetAllChampionSkins };
 	t.detach();
 
-	std::thread AutoAcceptThread(&GameTab::AutoAccept);
-	AutoAcceptThread.detach();
+	std::thread automationThread(&GameAutomation::Run);
+	automationThread.detach();
 
 	return true;
 }

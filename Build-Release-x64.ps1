@@ -2,8 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $SolutionPath = Join-Path $ProjectRoot "MBot.sln"
-$OutputPath = Join-Path $ProjectRoot "x64"
-$IntermediatePath = Join-Path $ProjectRoot "MBot\x64"
+$BuildPath = Join-Path $ProjectRoot "build"
 $VsWherePath = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
 
 function Clear-BuildDirectory {
@@ -43,8 +42,7 @@ try {
         throw "vswhere.exe not found: $VsWherePath"
     }
 
-    Clear-BuildDirectory -Path $OutputPath -ExpectedRelativePath "x64"
-    Clear-BuildDirectory -Path $IntermediatePath -ExpectedRelativePath "MBot\x64"
+    Clear-BuildDirectory -Path $BuildPath -ExpectedRelativePath "build"
 
     $VisualStudioPath = & $VsWherePath `
         -latest `
@@ -70,7 +68,7 @@ try {
         throw "Build failed with exit code $LASTEXITCODE."
     }
 
-    $ExePath = Join-Path $ProjectRoot "x64\Release\MBot.exe"
+    $ExePath = Join-Path $ProjectRoot "build\x64\Release\MBot.exe"
     Write-Host ""
     Write-Host "Build completed successfully." -ForegroundColor Green
     Write-Host "Executable: $ExePath"

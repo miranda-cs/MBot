@@ -5,7 +5,7 @@
 #include <cpr/cpr.h>
 
 #include "Definitions.h"
-#include "Auth.h"
+#include "League/Auth.h"
 
 class LCU
 {
