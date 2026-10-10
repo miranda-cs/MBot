@@ -25,6 +25,28 @@ public:
 		static std::string ledgeUrl;
 		static std::string storeUrl;
 		static std::string localhostUrl = "https://127.0.0.1";
+		static bool useRiotClient = false;
+
+		const auto setLocalClient = [&](const bool riotClient, const bool updateInput) {
+			useRiotClient = riotClient;
+			if (useRiotClient && !LCU::SetCurrentClientRiotInfo())
+				return false;
+
+			const ClientInfo& info = useRiotClient ? LCU::riot : LCU::league;
+			if (info.port == 0 || info.header.empty())
+				return false;
+
+			customPort = info.port;
+			customHeader = info.header;
+
+			if (updateInput)
+			{
+				std::strcpy(inputPort, std::to_string(info.port).c_str());
+				std::strcpy(inputHeader, info.header.c_str());
+			}
+
+			return true;
+			};
 
 		if (once)
 		{
@@ -38,12 +60,23 @@ public:
 
 		if (onOpen)
 		{
-			customHeader = LCU::league.header;
-			customPort = LCU::league.port;
+			setLocalClient(useRiotClient, false);
 
 			ledgeUrl = GetLedgeUrl();
 			storeUrl = LCU::Request("GET", "/lol-store/v1/getStoreUrl");
 			std::erase(storeUrl, '"');
+		}
+
+		ImGui::Text("Client:");
+		ImGui::SameLine();
+		if (ImGui::RadioButton("LCU##customClient", !useRiotClient))
+		{
+			setLocalClient(false, isCustomOpen);
+		}
+		ImGui::SameLine();
+		if (ImGui::RadioButton("Riot##customClient", useRiotClient))
+		{
+			setLocalClient(true, isCustomOpen);
 		}
 
 		ImGui::Text("Method:");
@@ -74,26 +107,29 @@ public:
 
 			if (ImGui::Button("LCU"))
 			{
+				setLocalClient(false, false);
 				if (strlen(urlText) == 0 || strcmp(urlText, localhostUrl.c_str()) == 0
 					|| strcmp(urlText, storeUrl.c_str()) == 0 || strcmp(urlText, ledgeUrl.c_str()) == 0)
 				{
 					std::strcpy(urlText, localhostUrl.c_str());
 				}
-				std::strcpy(inputPort, std::to_string(LCU::league.port).c_str());
-				std::strcpy(inputHeader, LCU::league.header.c_str());
+				std::strcpy(inputPort, std::to_string(customPort).c_str());
+				std::strcpy(inputHeader, customHeader.c_str());
 			}
 			ImGui::SameLine();
 
 			if (ImGui::Button("Riot"))
 			{
-				LCU::SetCurrentClientRiotInfo();
-				if (strlen(urlText) == 0 || strcmp(urlText, localhostUrl.c_str()) == 0
-					|| strcmp(urlText, storeUrl.c_str()) == 0 || strcmp(urlText, ledgeUrl.c_str()) == 0)
+				if (setLocalClient(true, false))
 				{
-					std::strcpy(urlText, localhostUrl.c_str());
+					if (strlen(urlText) == 0 || strcmp(urlText, localhostUrl.c_str()) == 0
+						|| strcmp(urlText, storeUrl.c_str()) == 0 || strcmp(urlText, ledgeUrl.c_str()) == 0)
+					{
+						std::strcpy(urlText, localhostUrl.c_str());
+					}
+					std::strcpy(inputPort, std::to_string(customPort).c_str());
+					std::strcpy(inputHeader, customHeader.c_str());
 				}
-				std::strcpy(inputPort, std::to_string(LCU::riot.port).c_str());
-				std::strcpy(inputHeader, LCU::riot.header.c_str());
 			}
 			ImGui::SameLine();
 
@@ -180,8 +216,7 @@ public:
 		else
 		{
 			isCustomOpen = false;
-			customHeader = LCU::league.header;
-			customPort = LCU::league.port;
+			setLocalClient(useRiotClient, false);
 		}
 
 		ImGui::Columns(2, nullptr, false);
@@ -190,69 +225,104 @@ public:
 		if (ImGui::Button("Send custom request##customTab"))
 		{
 			auto sURL = std::string(urlText);
+			int requestPort = customPort;
+			std::string requestHeader = customHeader;
+			bool canSendRequest = true;
 
-			if (sURL.find("https://127.0.0.1") == std::string::npos && !isCustomOpen)
+			if (!isCustomOpen)
 			{
-				if (sURL.find("https://") == std::string::npos && sURL.find("http://") == std::string::npos)
+				if (!setLocalClient(useRiotClient, false))
 				{
-					while (sURL[0] == ' ' || sURL[0] == '\n')
-						sURL.erase(sURL.begin());
-					if (sURL[0] != '/')
-						sURL.insert(0, "/");
-					sURL.insert(0, "https://127.0.0.1:" + std::to_string(LCU::league.port));
+					result = useRiotClient ? "Not connected to Riot Client" : "Not connected to League";
+					canSendRequest = false;
+				}
+				requestPort = customPort;
+				requestHeader = customHeader;
+			}
+
+			while (!sURL.empty() && (sURL[0] == ' ' || sURL[0] == '\n'))
+				sURL.erase(sURL.begin());
+
+			if (canSendRequest && sURL.empty())
+			{
+				result = "URL is empty";
+				canSendRequest = false;
+			}
+
+			if (canSendRequest)
+			{
+				const size_t schemeEnd = sURL.find("://");
+				const bool hasScheme = schemeEnd != std::string::npos;
+
+				if (!hasScheme)
+				{
+					if (!isCustomOpen || requestHeader.find("Host: 127.0.0.1") != std::string::npos)
+					{
+						if (sURL[0] != '/')
+							sURL.insert(0, "/");
+						sURL.insert(0, "https://127.0.0.1:" + std::to_string(requestPort));
+					}
+					else
+					{
+						result = "URL needs http:// or https:// when using a custom external header";
+						canSendRequest = false;
+					}
+				}
+				else if (requestPort != 443 && requestPort != 80)
+				{
+					const size_t hostStart = schemeEnd + strlen("://");
+					size_t hostEnd = sURL.find("/", hostStart);
+					if (hostEnd == std::string::npos)
+						hostEnd = sURL.size();
+
+					const std::string host = sURL.substr(hostStart, hostEnd - hostStart);
+					if (host.find(":") == std::string::npos)
+						sURL.insert(hostEnd, ":" + std::to_string(requestPort));
 				}
 			}
-			else if (sURL.find("https://127.0.0.1:") == std::string::npos && !isCustomOpen)
+
+			if (canSendRequest)
 			{
-				sURL.insert(strlen("https://127.0.0.1"), ":" + std::to_string(LCU::league.port));
-			}
-			else if (sURL.find("https://") != std::string::npos || sURL.find("https://") != std::string::npos)
-			{
-				if (customPort != 443 && customPort != 80)
+				cpr::Session customSession;
+				customSession.SetVerifySsl(false);
+				customSession.SetHeader(Utils::StringToHeader(requestHeader));
+				customSession.SetBody(requestText);
+				customSession.SetUrl(sURL);
+
+				cpr::Response r;
+
+				const std::string upperMethod = Utils::ToUpper(method);
+				if (upperMethod == "GET")
 				{
-					sURL.insert(sURL.find("/", strlen("https://")), ":" + std::to_string(customPort));
+					r = customSession.Get();
 				}
-			}
+				else if (upperMethod == "POST")
+				{
+					r = customSession.Post();
+				}
+				else if (upperMethod == "OPTIONS")
+				{
+					r = customSession.Options();
+				}
+				else if (upperMethod == "DELETE")
+				{
+					r = customSession.Delete();
+				}
+				else if (upperMethod == "PUT")
+				{
+					r = customSession.Put();
+				}
+				else if (upperMethod == "HEAD")
+				{
+					r = customSession.Head();
+				}
+				else if (upperMethod == "PATCH")
+				{
+					r = customSession.Patch();
+				}
 
-			cpr::Session customSession;
-			customSession.SetVerifySsl(false);
-			customSession.SetHeader(Utils::StringToHeader(customHeader));
-			customSession.SetBody(requestText);
-			customSession.SetUrl(sURL);
-
-			cpr::Response r;
-
-			const std::string upperMethod = Utils::ToUpper(method);
-			if (upperMethod == "GET")
-			{
-				r = customSession.Get();
+				result = r.text;
 			}
-			else if (upperMethod == "POST")
-			{
-				r = customSession.Post();
-			}
-			else if (upperMethod == "OPTIONS")
-			{
-				r = customSession.Options();
-			}
-			else if (upperMethod == "DELETE")
-			{
-				r = customSession.Delete();
-			}
-			else if (upperMethod == "PUT")
-			{
-				r = customSession.Put();
-			}
-			else if (upperMethod == "HEAD")
-			{
-				r = customSession.Head();
-			}
-			else if (upperMethod == "PATCH")
-			{
-				r = customSession.Patch();
-			}
-
-			result = r.text;
 		}
 
 		ImGui::SameLine();

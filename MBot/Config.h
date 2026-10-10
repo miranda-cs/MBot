@@ -57,6 +57,7 @@ struct Settings
 	{
 		size_t indexMultiSearch = 0;
 		bool autoAcceptEnabled = false;
+		bool instaTradeFirstPick = false;
 		bool instalockEnabled = false;
 		bool autoBanEnabled = false;
 		int instalockId = 0;
@@ -115,6 +116,7 @@ public:
 
 				root["gameTab"]["indexMultiSearch"] = S.gameTab.indexMultiSearch;
 				root["gameTab"]["autoAcceptEnabled"] = S.gameTab.autoAcceptEnabled;
+				root["gameTab"]["instaTradeFirstPick"] = S.gameTab.instaTradeFirstPick;
 				root["gameTab"]["instalockEnabled"] = S.gameTab.instalockEnabled;
 				root["gameTab"]["autoBanEnabled"] = S.gameTab.autoBanEnabled;
 				root["gameTab"]["instalockDelay"] = S.gameTab.instalockDelay;
@@ -187,6 +189,8 @@ public:
 					S.gameTab.indexMultiSearch = t.asUInt();
 				if (auto t = root["gameTab"]["autoAcceptEnabled"]; !t.empty())
 					S.gameTab.autoAcceptEnabled = t.asBool();
+				if (auto t = root["gameTab"]["instaTradeFirstPick"]; !t.empty())
+					S.gameTab.instaTradeFirstPick = t.asBool();
 				if (auto t = root["gameTab"]["instalockEnabled"]; !t.empty())
 					S.gameTab.instalockEnabled = t.asBool();
 				if (auto t = root["gameTab"]["autoBanEnabled"]; !t.empty())

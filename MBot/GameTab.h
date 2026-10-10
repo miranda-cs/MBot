@@ -65,6 +65,10 @@ public:
 
 			ImGui::Checkbox("Auto accept", &S.gameTab.autoAcceptEnabled);
 
+			ImGui::Checkbox("Insta trade first pick", &S.gameTab.instaTradeFirstPick);
+			ImGui::SameLine();
+			ImGui::HelpMarker("Requests a pick-order swap with your team's first picker as soon as champion select starts. Only works in 5v5 Draft, Ranked Solo and Ranked Flex.");
+
 			ImGui::Separator();
 
 			const bool isStillBeingFetched = champSkins.empty();
@@ -339,6 +343,55 @@ public:
 		return S.gameTab.backupBanId;
 	}
 
+	static int GetFirstTeamPickCellId(const Json::Value& champSelect)
+	{
+		const auto& myTeam = champSelect["myTeam"];
+		const auto& actionGroups = champSelect["actions"];
+		if (!myTeam.isArray() || myTeam.size() != 5 || !actionGroups.isArray())
+			return -1;
+
+		for (const auto& actionGroup : actionGroups)
+		{
+			if (!actionGroup.isArray())
+				continue;
+
+			int firstCellId = -1;
+			for (const auto& action : actionGroup)
+			{
+				if (action["type"].asString() != "pick")
+					continue;
+
+				const int actorCellId = action["actorCellId"].asInt();
+				for (const auto& player : myTeam)
+				{
+					if (player["cellId"].asInt() == actorCellId)
+					{
+						if (firstCellId < 0 || actorCellId < firstCellId)
+							firstCellId = actorCellId;
+						break;
+					}
+				}
+			}
+
+			// Red side has two simultaneous first picks. Cell order matches the
+			// top-to-bottom order shown in champion select, so prefer the lower id.
+			if (firstCellId >= 0)
+				return firstCellId;
+		}
+
+		return -1;
+	}
+
+	static bool IsSupportedFirstPickTradeQueue(const Json::Value& gameflowSession)
+	{
+		const auto& queue = gameflowSession["gameData"]["queue"];
+		if (!queue.isObject() || queue["numPlayersPerTeam"].asInt() != 5 || queue["mapId"].asInt() != 11)
+			return false;
+
+		const int queueId = queue["id"].asInt();
+		return queueId == 400 || queueId == 420 || queueId == 440;
+	}
+
 	static void OnChampSelectReady(const bool instantMute = false)
 	{
 		auto start = std::chrono::system_clock::now();
@@ -446,7 +499,8 @@ public:
 				continue;
 			}
 
-			if (S.gameTab.autoAcceptEnabled || (S.gameTab.autoBanEnabled && S.gameTab.autoBanId > 0) ||
+			if (S.gameTab.autoAcceptEnabled || S.gameTab.instaTradeFirstPick ||
+				(S.gameTab.autoBanEnabled && S.gameTab.autoBanId > 0) ||
 				(S.gameTab.dodgeOnBan && S.gameTab.instalockEnabled) ||
 				(S.gameTab.instalockEnabled && S.gameTab.instalockId) ||
 				S.gameTab.instantMute)
@@ -472,12 +526,20 @@ public:
 				static bool onChampSelect = true; //false when in champ select
 				static int useBackupId = 0;
 				static bool isPicked = false;
+				static bool firstPickTradeSent = false;
+				static int firstPickTradeQueueEligibility = -1;
+				static auto lastFirstPickQueueCheck = std::chrono::steady_clock::time_point{};
+				static auto lastFirstPickTradeAttempt = std::chrono::steady_clock::time_point{};
 
 				if (rootSearch["searchState"].asString() != "Found") // not found, not in champ select
 				{
 					onChampSelect = true;
 					useBackupId = 0;
 					isPicked = false;
+					firstPickTradeSent = false;
+					firstPickTradeQueueEligibility = -1;
+					lastFirstPickQueueCheck = {};
+					lastFirstPickTradeAttempt = {};
 					std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 					continue;
 				}
@@ -489,6 +551,10 @@ public:
 					onChampSelect = true;
 					useBackupId = 0;
 					isPicked = false;
+					firstPickTradeSent = false;
+					firstPickTradeQueueEligibility = -1;
+					lastFirstPickQueueCheck = {};
+					lastFirstPickTradeAttempt = {};
 					if (S.gameTab.autoAcceptEnabled)
 					{
 						session.SetUrl(std::format("https://127.0.0.1:{}/lol-matchmaking/v1/ready-check/accept", LCU::league.port));
@@ -513,6 +579,57 @@ public:
 						{
 							std::thread champSelectReadyThread(&GameTab::OnChampSelectReady, S.gameTab.instantMute);
 							champSelectReadyThread.detach();
+						}
+					}
+
+					if (S.gameTab.instaTradeFirstPick && firstPickTradeQueueEligibility < 0)
+					{
+						const auto now = std::chrono::steady_clock::now();
+						if (lastFirstPickQueueCheck.time_since_epoch().count() == 0 ||
+							now - lastFirstPickQueueCheck >= std::chrono::milliseconds(100))
+						{
+							lastFirstPickQueueCheck = now;
+							session.SetUrl(std::format("https://127.0.0.1:{}/lol-gameflow/v1/session", LCU::league.port));
+							const std::string gameflowResponse = session.Get().text;
+							Json::Value gameflowSession;
+							if (reader->parse(gameflowResponse.c_str(),
+								gameflowResponse.c_str() + static_cast<int>(gameflowResponse.length()), &gameflowSession, &err) &&
+								gameflowSession["gameData"]["queue"]["id"].isInt())
+							{
+								firstPickTradeQueueEligibility = IsSupportedFirstPickTradeQueue(gameflowSession) ? 1 : 0;
+							}
+						}
+					}
+
+					if (S.gameTab.instaTradeFirstPick && firstPickTradeQueueEligibility == 1 && !firstPickTradeSent)
+					{
+						const int localPlayerCellId = rootChampSelect["localPlayerCellId"].asInt();
+						const int firstPickCellId = GetFirstTeamPickCellId(rootChampSelect);
+						if (firstPickCellId == localPlayerCellId)
+						{
+							firstPickTradeSent = true;
+						}
+						else if (firstPickCellId >= 0)
+						{
+							const auto now = std::chrono::steady_clock::now();
+							if (lastFirstPickTradeAttempt.time_since_epoch().count() == 0 ||
+								now - lastFirstPickTradeAttempt >= std::chrono::milliseconds(100))
+							{
+								lastFirstPickTradeAttempt = now;
+								session.SetUrl(std::format(
+									"https://127.0.0.1:{}/lol-champ-select/v1/session/pick-order-swaps/{}/request",
+									LCU::league.port, firstPickCellId));
+								session.SetBody("");
+								const std::string tradeResponse = session.Post().text;
+
+								Json::Value tradeResult;
+								if (reader->parse(tradeResponse.c_str(),
+									tradeResponse.c_str() + static_cast<int>(tradeResponse.length()), &tradeResult, &err) &&
+									tradeResult["state"].asString() == "SENT")
+								{
+									firstPickTradeSent = true;
+								}
+							}
 						}
 					}
 
@@ -640,9 +757,11 @@ public:
 							}
 						}
 					}
-					else // instalock or autoban not enabled, we do nothing in champ select
+					else // instalock or autoban not enabled, we only need to poll quickly while waiting for the trade API
 					{
-						std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+						const bool waitingForFirstPickTrade = S.gameTab.instaTradeFirstPick && !firstPickTradeSent &&
+							firstPickTradeQueueEligibility != 0;
+						std::this_thread::sleep_for(std::chrono::milliseconds(waitingForFirstPickTrade ? 10 : 1000));
 					}
 				}
 			}
