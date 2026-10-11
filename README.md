@@ -8,7 +8,7 @@ I will not upload releases to this repository because they may be flagged by Rio
 
 ## Attribution
 
-This repository is based on the original project by KebsCS:
+This repository is based on the original project by kebscs:
 https://github.com/KebsCS/KBotExt
 
 Original work belongs to the original author. This version contains my own modifications.
