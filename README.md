@@ -13,6 +13,16 @@ https://github.com/KebsCS/KBotExt
 
 Original work belongs to the original author. This version contains my own modifications.
 
+## Screenshots
+
+### Main
+
+![MBot main interface](screenshots/main.png)
+
+### Misc
+
+![MBot misc interface](screenshots/misc.png)
+
 ## Build
 
 1. Install Visual Studio 2022 with the C++ desktop workload.
