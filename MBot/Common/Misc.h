@@ -3,10 +3,7 @@
 #include <fstream>
 #include <thread>
 #include <filesystem>
-#include <map>
-#include <string_view>
 #include <tlhelp32.h>
-#include "LCU.h"
 #include "Config.h"
 
 #include "imgui_internal.h"
@@ -27,120 +24,6 @@ public:
 		const std::string path = std::format("{}LeagueClient.exe", S.leaguePath);
 		Utils::OpenUrl(path.c_str(), args.c_str(), SW_SHOWNORMAL);
 		return false;
-	}
-
-	static std::string GetCurrentPatch()
-	{
-		const std::string result = cpr::Get(cpr::Url{ "http://ddragon.leagueoflegends.com/api/versions.json" }).text;
-		const Json::CharReaderBuilder builder;
-		const std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
-		JSONCPP_STRING err;
-		Json::Value root;
-		if (reader->parse(result.c_str(), result.c_str() + static_cast<int>(result.length()), &root, &err))
-		{
-			return root[0].asString();
-		}
-		return "0.0.0";
-	}
-
-	static void GetAllChampionSkins()
-	{
-		Json::CharReaderBuilder builder;
-		const std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
-		JSONCPP_STRING err;
-		Json::Value root;
-
-		for (int attempt = 0; attempt < 3; attempt++)
-		{
-			std::string getSkins = cpr::Get(cpr::Url{ "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/skins.json" }).text;
-			root.clear();
-			err.clear();
-			if (reader->parse(getSkins.c_str(), getSkins.c_str() + static_cast<int>(getSkins.length()), &root, &err) && root.isObject())
-				break;
-
-			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-		}
-		if (!root.isObject())
-			return;
-
-		std::map<std::string, Champ> champs;
-		for (const std::string& id : root.getMemberNames())
-		{
-			const Json::Value currentSkin = root[id];
-			if (!currentSkin["isBase"].asBool())
-				continue;
-
-			const std::string champName = GetChampionAliasFromLoadScreenPath(currentSkin["loadScreenPath"].asString());
-			if (champName.empty() || IsJadeChampionAlias(champName))
-				continue;
-
-			std::string champKey = id;
-			if (champKey.size() >= 3 && champKey.substr(champKey.size() - 3) == "000")
-				champKey.erase(champKey.size() - 3);
-
-			std::pair<std::string, std::string> skin;
-			champs[champName].name = champName;
-			champs[champName].key = std::stoi(champKey);
-			skin.first = id;
-			skin.second = "default";
-			champs[champName].skins.insert(champs[champName].skins.begin(), skin);
-		}
-
-		for (const std::string& id : root.getMemberNames())
-		{
-			const Json::Value currentSkin = root[id];
-			if (currentSkin["isBase"].asBool())
-				continue;
-
-			const std::string champName = GetChampionAliasFromLoadScreenPath(currentSkin["loadScreenPath"].asString());
-			if (champName.empty() || IsJadeChampionAlias(champName) || !champs.contains(champName))
-				continue;
-
-			std::pair<std::string, std::string> skin;
-			const std::string name = currentSkin["name"].asString();
-			if (currentSkin["questSkinInfo"]) // K/DA ALL OUT Seraphine
-			{
-				for (const Json::Value skinTiers = currentSkin["questSkinInfo"]["tiers"]; const auto & skinTier : skinTiers)
-				{
-					skin.first = skinTier["id"].asString();
-					skin.second = skinTier["name"].asString();
-					champs[champName].skins.emplace_back(skin);
-				}
-			}
-			else
-			{
-				skin.first = id;
-				skin.second = name;
-				champs[champName].skins.emplace_back(skin);
-			}
-		}
-
-		std::vector<Champ> temp;
-		for (const auto& c : champs)
-		{
-			temp.emplace_back(c.second);
-		}
-		champSkins = temp;
-	}
-
-	static bool IsJadeChampionAlias(const std::string& alias)
-	{
-		return alias.rfind("Jade_", 0) == 0;
-	}
-
-	static std::string GetChampionAliasFromLoadScreenPath(const std::string& loadScreenPath)
-	{
-		constexpr std::string_view marker = "ASSETS/Characters/";
-		const size_t nameStart = loadScreenPath.find(marker);
-		if (nameStart == std::string::npos)
-			return "";
-
-		const size_t aliasStart = nameStart + marker.size();
-		const size_t aliasEnd = loadScreenPath.find('/', aliasStart);
-		if (aliasEnd == std::string::npos)
-			return "";
-
-		return loadScreenPath.substr(aliasStart, aliasEnd - aliasStart);
 	}
 
 	static void TaskKillLeague()

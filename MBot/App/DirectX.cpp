@@ -1,6 +1,7 @@
 ﻿#include "DirectX.h"
 
 #include "Automation/GameAutomation.h"
+#include "League/ChampionService.h"
 #include "GameTab.h"
 #include "InfoTab.h"
 #include "LoginTab.h"
@@ -43,9 +44,9 @@ bool Direct3D11Render::DirectXInit(const HWND hWnd)
 
 	Renderimgui(hWnd);
 
-	gamePatch = Misc::GetCurrentPatch();
+	gamePatch = League::ChampionService::GetCurrentPatch();
 
-	std::thread t{ Misc::GetAllChampionSkins };
+	std::thread t{ League::ChampionService::LoadChampionSkins };
 	t.detach();
 
 	std::thread automationThread(&GameAutomation::Run);

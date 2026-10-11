@@ -50,10 +50,6 @@ struct ChampAll
 	ChampMastery mas;
 };
 
-inline std::vector<ChampMinimal> champsMinimal;
-inline std::vector<ChampMastery> champsMastery;
-inline std::vector<ChampAll> champsAll;
-
 struct Skin
 {
 	std::string name;
@@ -65,8 +61,6 @@ struct Skin
 	int quantity;
 	std::string uuid;
 };
-
-inline std::vector<Skin> ownedSkins;
 
 enum QueueID
 {

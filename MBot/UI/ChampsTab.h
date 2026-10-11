@@ -2,7 +2,7 @@
 
 #include "Definitions.h"
 #include "Includes.h"
-#include "LCU.h"
+#include "ChampionService.h"
 
 #pragma warning (disable : 4996)
 
@@ -14,6 +14,7 @@ public:
 		static bool bOnOpen = true;
 		static unsigned iChampsOwned = 0;
 		static bool bSortOnOpen = false;
+		static std::vector<ChampAll> champions;
 
 		if (ImGui::BeginTabItem("Champs"))
 		{
@@ -30,107 +31,8 @@ public:
 			{
 				bOnOpen = false;
 				bSortOnOpen = true;
-				iChampsOwned = 0;
-				champsMinimal.clear();
-				champsMastery.clear();
-
-				static Json::Value root;
-				static Json::CharReaderBuilder builder;
-				static const std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
-				static JSONCPP_STRING err;
-				std::string getSession = LCU::Request("GET", "https://127.0.0.1/lol-login/v1/session");
-				if (reader->parse(getSession.c_str(), getSession.c_str() + static_cast<int>(getSession.length()), &root, &err))
-				{
-					std::string summId = root["summonerId"].asString();
-
-					std::string getChampions = LCU::Request("GET",
-						std::format("https://127.0.0.1/lol-champions/v1/inventories/{}/champions-minimal",
-							summId));
-
-					if (reader->parse(getChampions.c_str(), getChampions.c_str() + static_cast<int>(getChampions.length()), &root, &err))
-					{
-						if (root.isArray())
-						{
-							for (auto& champObj : root)
-							{
-								ChampMinimal champ;
-
-								champ.active = champObj["active"].asBool();
-								champ.alias = champObj["alias"].asString();
-								champ.banVoPath = champObj["banVoPath"].asString();
-								champ.baseLoadScreenPath = champObj["baseLoadScreenPath"].asString();
-								champ.botEnabled = champObj["botEnabled"].asBool();
-								champ.chooseVoPath = champObj["chooseVoPath"].asString();
-								champ.freeToPlay = champObj["freeToPlay"].asBool();
-								champ.id = champObj["id"].asInt();
-								champ.name = champObj["name"].asString();
-								auto& ownershipObj = champObj["ownership"];
-								champ.freeToPlayReward = ownershipObj["freeToPlayReward"].asBool();
-								champ.owned = ownershipObj["owned"].asInt();
-								if (champ.owned)
-									iChampsOwned++;
-								if (champ.freeToPlay && !champ.owned)
-									champ.purchased = "0";
-								else
-									champ.purchased = champObj["purchased"].asString();
-								champ.rankedPlayEnabled = champObj["rankedPlayEnabled"].asBool();
-								//auto rolesObj = champObj.GetObject("roles"); // TODO
-								champ.squarePortraitPath = champObj["squarePortraitPath"].asString();
-								champ.stingerSfxPath = champObj["stingerSfxPath"].asString();
-								champ.title = champObj["title"].asString();
-
-								champsMinimal.emplace_back(champ);
-							}
-						}
-					}
-
-					std::string getCollections = LCU::Request("GET",
-						std::format("https://127.0.0.1/lol-collections/v1/inventories/{}/champion-mastery",
-							summId));
-
-					if (reader->parse(getCollections.c_str(), getCollections.c_str() + static_cast<int>(getCollections.length()), &root, &err))
-					{
-						if (root.isArray())
-						{
-							for (auto& champObj : root)
-							{
-								ChampMastery champ;
-								champ.championId = champObj["championId"].asInt();
-								champ.championLevel = champObj["championLevel"].asInt();
-								champ.championPoints = champObj["championPoints"].asInt();
-								champ.championPointsSinceLastLevel = champObj["championPointsSinceLastLevel"].asInt();
-								champ.championPointsUntilNextLevel = champObj["championPointsUntilNextLevel"].asInt();
-								champ.chestGranted = champObj["chestGranted"].asInt();
-								champ.formattedChampionPoints = champObj["formattedChampionPoints"].asString();
-								champ.formattedMasteryGoal = champObj["formattedMasteryGoal"].asString();
-								champ.highestGrade = champObj["highestGrade"].asString();
-								champ.lastPlayTime = std::to_string(champObj["lastPlayTime"].asUInt64());
-								champ.playerId = std::to_string(champObj["playerId"].asInt64());
-								champ.tokensEarned = champObj["tokensEarned"].asInt();
-
-								champsMastery.emplace_back(champ);
-							}
-						}
-					}
-				}
-
-				champsAll.clear();
-
-				for (const auto& minimal : champsMinimal)
-				{
-					if (!minimal.owned)
-						continue;
-					ChampAll champ;
-					champ.min = minimal;
-					for (const auto& mastery : champsMastery)
-					{
-						if (minimal.id == mastery.championId)
-						{
-							champ.mas = mastery;
-						}
-					}
-					champsAll.emplace_back(champ);
-				}
+				champions = League::ChampionService::GetChampionCollection();
+				iChampsOwned = static_cast<unsigned>(champions.size());
 			}
 
 			if ((iLastSort != iSort) || bSortOnOpen)
@@ -141,13 +43,13 @@ public:
 				{
 					// alphabetically
 				case 0:
-					std::ranges::sort(champsAll, [](const ChampAll& lhs, const ChampAll& rhs) {
+					std::ranges::sort(champions, [](const ChampAll& lhs, const ChampAll& rhs) {
 						return lhs.min.name < rhs.min.name;
 						});
 					break;
 					// purchase date
 				case 1:
-					std::ranges::sort(champsAll, [](const ChampAll& lhs, const ChampAll& rhs) {
+					std::ranges::sort(champions, [](const ChampAll& lhs, const ChampAll& rhs) {
 						return std::stoll(lhs.min.purchased) < std::stoll(rhs.min.purchased);
 						});
 					break;
@@ -160,7 +62,7 @@ public:
 			if (ImGui::Button("Copy names to clipboard##champsTab"))
 			{
 				std::string allNames;
-				for (const auto& [min, mas] : champsAll)
+				for (const auto& [min, mas] : champions)
 				{
 					if (!min.owned)
 						continue;
@@ -176,7 +78,7 @@ public:
 
 			ImGui::Separator();
 			ImGui::Text("Champions owned: %d", iChampsOwned);
-			for (const auto& [min, mas] : champsAll)
+			for (const auto& [min, mas] : champions)
 			{
 				if (!min.owned)
 					continue;

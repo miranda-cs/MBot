@@ -51,6 +51,15 @@
     <ClCompile Include="League\ChampionService.cpp">
       <Filter>League</Filter>
     </ClCompile>
+    <ClCompile Include="League\CustomRequestService.cpp">
+      <Filter>League</Filter>
+    </ClCompile>
+    <ClCompile Include="League\GameService.cpp">
+      <Filter>League</Filter>
+    </ClCompile>
+    <ClCompile Include="League\PlayerService.cpp">
+      <Filter>League</Filter>
+    </ClCompile>
     <ClCompile Include="League\LcuHttpClient.cpp">
       <Filter>League</Filter>
     </ClCompile>
@@ -123,6 +132,15 @@
       <Filter>Automation</Filter>
     </ClInclude>
     <ClInclude Include="League\ChampionService.h">
+      <Filter>League</Filter>
+    </ClInclude>
+    <ClInclude Include="League\CustomRequestService.h">
+      <Filter>League</Filter>
+    </ClInclude>
+    <ClInclude Include="League\GameService.h">
+      <Filter>League</Filter>
+    </ClInclude>
+    <ClInclude Include="League\PlayerService.h">
       <Filter>League</Filter>
     </ClInclude>
     <ClInclude Include="League\LcuHttpClient.h">

@@ -108,11 +108,12 @@ void GameAutomation::PickOrderSwapAutomation::Handle(const Json::Value& champSel
 		return;
 	}
 
+	int swapId = -1;
 	if (const Json::Value& swaps = champSelect["pickOrderSwaps"]; swaps.isArray())
 	{
 		for (const auto& swap : swaps)
 		{
-			if (swap["id"].asInt() != targetCellId)
+			if (swap["cellId"].asInt() != targetCellId)
 				continue;
 
 			const std::string state = Utils::ToUpper(swap["state"].asString());
@@ -121,8 +122,13 @@ void GameAutomation::PickOrderSwapAutomation::Handle(const Json::Value& champSel
 				requested_ = true;
 				return;
 			}
+			if (state == "AVAILABLE")
+				swapId = swap["id"].asInt();
+			break;
 		}
 	}
+	if (swapId < 0)
+		return;
 
 	const auto now = std::chrono::steady_clock::now();
 	if (lastAttempt_.time_since_epoch().count() != 0 &&
@@ -132,10 +138,8 @@ void GameAutomation::PickOrderSwapAutomation::Handle(const Json::Value& champSel
 	}
 	lastAttempt_ = now;
 
-	// The endpoint becomes available shortly after session creation, but the
-	// LCU does not consistently expose an AVAILABLE entry before the request.
 	const cpr::Response response = http_.Request("POST", std::format(
-		"/lol-champ-select/v1/session/pick-order-swaps/{}/request", targetCellId));
+		"/lol-champ-select/v1/session/pick-order-swaps/{}/request", swapId));
 	Json::Value result;
 	if (IsSuccessful(response) && JsonUtils::Parse(response.text, result) &&
 		Utils::ToUpper(result["state"].asString()) == "SENT")

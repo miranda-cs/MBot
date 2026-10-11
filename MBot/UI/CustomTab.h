@@ -1,398 +1,198 @@
 #pragma once
 
+#include <algorithm>
+#include <cstring>
+#include <string>
+#include <string_view>
+
+#include "Config.h"
+#include "CustomRequestService.h"
 #include "Includes.h"
-#include "LCU.h"
+#include "JsonUtils.h"
+#include "Utils.h"
 
 class CustomTab
 {
 public:
 	static void Custom()
 	{
-		static bool once = true;
+		static bool initialized = false;
+		static char method[50] = {};
+		static char urlText[1024 * 16] = {};
+		static char requestText[1024 * 32] = {};
+		static char inputPort[64] = {};
+		static char inputHeader[1024 * 16] = {};
 
-		static char method[50];
-		static char urlText[1024 * 16];
-		static char requestText[1024 * 32];
-
-		static char inputPort[64] = "";
-		static char inputHeader[1024 * 16];
-
-		static std::string customHeader = LCU::league.header;
-		static int customPort = LCU::league.port;
-
-		static bool isCustomOpen = false;
-
-		static std::string ledgeUrl;
-		static std::string storeUrl;
-		static std::string localhostUrl = "https://127.0.0.1";
 		static bool useRiotClient = false;
+		static bool customConnectionOpen = false;
+		static std::string selectedPresetUrl;
+		static std::string result;
 
-		const auto setLocalClient = [&](const bool riotClient, const bool updateInput) {
-			useRiotClient = riotClient;
-			if (useRiotClient && !LCU::SetCurrentClientRiotInfo())
-				return false;
+		if (!initialized)
+		{
+			initialized = true;
+			CopyToBuffer(method, S.customTab.method);
+			CopyToBuffer(urlText, S.customTab.urlText);
+			CopyToBuffer(requestText, S.customTab.requestText);
+			CopyToBuffer(inputPort, S.customTab.port);
+			CopyToBuffer(inputHeader, S.customTab.header);
+			selectedPresetUrl = urlText[0] == '\0' ? std::string(LocalhostUrl) : std::string(urlText);
+		}
 
-			const ClientInfo& info = useRiotClient ? LCU::riot : LCU::league;
-			if (info.port == 0 || info.header.empty())
-				return false;
-
-			customPort = info.port;
-			customHeader = info.header;
-
-			if (updateInput)
+		const auto applyPreset = [&](const CustomRequestService::Preset preset) {
+			CustomRequestService::Connection connection;
+			std::string error;
+			if (!CustomRequestService::GetConnection(preset, connection, error))
 			{
-				std::strcpy(inputPort, std::to_string(info.port).c_str());
-				std::strcpy(inputHeader, info.header.c_str());
+				result = error;
+				return false;
 			}
 
+			const std::string currentUrl = urlText;
+			if (currentUrl.empty() || currentUrl == selectedPresetUrl || currentUrl == LocalhostUrl)
+				CopyToBuffer(urlText, connection.url);
+
+			selectedPresetUrl = connection.url;
+			CopyToBuffer(inputPort, connection.port);
+			CopyToBuffer(inputHeader, connection.header);
 			return true;
-			};
-
-		if (once)
-		{
-			once = false;
-			std::ranges::copy(S.customTab.method, method);
-			std::ranges::copy(S.customTab.urlText, urlText);
-			std::ranges::copy(S.customTab.requestText, requestText);
-			std::ranges::copy(S.customTab.port, inputPort);
-			std::ranges::copy(S.customTab.header, inputHeader);
-		}
-
-		if (onOpen)
-		{
-			setLocalClient(useRiotClient, false);
-
-			ledgeUrl = GetLedgeUrl();
-			storeUrl = LCU::Request("GET", "/lol-store/v1/getStoreUrl");
-			std::erase(storeUrl, '"');
-		}
+		};
 
 		ImGui::Text("Client:");
 		ImGui::SameLine();
 		if (ImGui::RadioButton("LCU##customClient", !useRiotClient))
 		{
-			setLocalClient(false, isCustomOpen);
+			useRiotClient = false;
+			if (customConnectionOpen)
+				applyPreset(CustomRequestService::Preset::League);
 		}
 		ImGui::SameLine();
 		if (ImGui::RadioButton("Riot##customClient", useRiotClient))
 		{
-			setLocalClient(true, isCustomOpen);
+			useRiotClient = true;
+			if (customConnectionOpen && !applyPreset(CustomRequestService::Preset::Riot))
+				useRiotClient = false;
 		}
 
 		ImGui::Text("Method:");
-		const ImVec2 label_size = ImGui::CalcTextSize("W", nullptr, true);
+		const ImVec2 labelSize = ImGui::CalcTextSize("W", nullptr, true);
 		ImGui::InputTextEx("##inputMethod", nullptr, method, IM_ARRAYSIZE(method),
-			ImVec2(S.Window.width - 130.f, label_size.y + ImGui::GetStyle().FramePadding.y * 2.0f), 0, nullptr, nullptr);
+			ImVec2(S.Window.width - 130.f, labelSize.y + ImGui::GetStyle().FramePadding.y * 2.0f),
+			0, nullptr, nullptr);
 
 		ImGui::Text("URL:");
 		ImGui::InputTextMultiline("##inputUrl", urlText, IM_ARRAYSIZE(urlText),
-			ImVec2(S.Window.width - 130.f, label_size.y + ImGui::GetStyle().FramePadding.y * 2.0f));
+			ImVec2(S.Window.width - 130.f, labelSize.y + ImGui::GetStyle().FramePadding.y * 2.0f));
 
 		ImGui::Text("Body:");
-		ImGui::InputTextMultiline("##inputBody", (requestText), IM_ARRAYSIZE(requestText), ImVec2(S.Window.width - 130.f,
-			(label_size.y + ImGui::GetStyle().FramePadding.y) *
-			6.f), ImGuiInputTextFlags_AllowTabInput);
+		ImGui::InputTextMultiline("##inputBody", requestText, IM_ARRAYSIZE(requestText),
+			ImVec2(S.Window.width - 130.f, (labelSize.y + ImGui::GetStyle().FramePadding.y) * 6.f),
+			ImGuiInputTextFlags_AllowTabInput);
 
-		S.customTab.method = method;
-		S.customTab.urlText = urlText;
-		S.customTab.requestText = requestText;
-
-		if (ImGui::CollapsingHeader("Custom Port/Header"))
+		customConnectionOpen = ImGui::CollapsingHeader("Custom Port/Header");
+		if (customConnectionOpen)
 		{
-			isCustomOpen = true;
 			ImGui::Text("Port:");
-			ImGui::InputText("##inputPort", inputPort, 64, ImGuiInputTextFlags_CharsDecimal);
-
+			ImGui::InputText("##inputPort", inputPort, IM_ARRAYSIZE(inputPort), ImGuiInputTextFlags_CharsDecimal);
 			ImGui::SameLine();
 
 			if (ImGui::Button("LCU"))
 			{
-				setLocalClient(false, false);
-				if (strlen(urlText) == 0 || strcmp(urlText, localhostUrl.c_str()) == 0
-					|| strcmp(urlText, storeUrl.c_str()) == 0 || strcmp(urlText, ledgeUrl.c_str()) == 0)
-				{
-					std::strcpy(urlText, localhostUrl.c_str());
-				}
-				std::strcpy(inputPort, std::to_string(customPort).c_str());
-				std::strcpy(inputHeader, customHeader.c_str());
+				useRiotClient = false;
+				applyPreset(CustomRequestService::Preset::League);
 			}
 			ImGui::SameLine();
-
 			if (ImGui::Button("Riot"))
 			{
-				if (setLocalClient(true, false))
-				{
-					if (strlen(urlText) == 0 || strcmp(urlText, localhostUrl.c_str()) == 0
-						|| strcmp(urlText, storeUrl.c_str()) == 0 || strcmp(urlText, ledgeUrl.c_str()) == 0)
-					{
-						std::strcpy(urlText, localhostUrl.c_str());
-					}
-					std::strcpy(inputPort, std::to_string(customPort).c_str());
-					std::strcpy(inputHeader, customHeader.c_str());
-				}
+				if (applyPreset(CustomRequestService::Preset::Riot))
+					useRiotClient = true;
 			}
 			ImGui::SameLine();
-
-			/** \
-			* \deprecated Use strcpy_s?
-			*/
-
 			if (ImGui::Button("Store"))
-			{
-				std::string storeHeader = LCU::GetStoreHeader();
-				if (!storeHeader.empty())
-				{
-					if (strlen(method) != 0)
-					{
-						std::strcpy(method, Utils::ToUpper(std::string(method)).c_str());
-					}
-					if (strlen(urlText) == 0 || strcmp(urlText, localhostUrl.c_str()) == 0
-						|| strcmp(urlText, storeUrl.c_str()) == 0 || strcmp(urlText, ledgeUrl.c_str()) == 0)
-					{
-						storeUrl = LCU::Request("GET", "/lol-store/v1/getStoreUrl");
-						std::erase(storeUrl, '"');
-						std::strcpy(urlText, storeUrl.c_str());
-					}
-					std::strcpy(inputPort, "443");
-					std::strcpy(inputHeader, storeHeader.c_str());
-				}
-			}
-
+				applyPreset(CustomRequestService::Preset::Store);
 			ImGui::SameLine();
-
 			if (ImGui::Button("Ledge"))
-			{
-				std::string ledgeHeader;
-
-				ledgeUrl = GetLedgeUrl();
-				if (!ledgeUrl.empty())
-				{
-					std::string ledgeHost;
-					if (auto n = ledgeUrl.find("https://"); n != std::string::npos)
-					{
-						ledgeHost = ledgeUrl.substr(n + strlen("https://"));
-					}
-					ledgeHeader += "Host: " + ledgeHost + "\r\n";
-
-					if (strlen(urlText) == 0 || strcmp(urlText, localhostUrl.c_str()) == 0
-						|| strcmp(urlText, storeUrl.c_str()) == 0 || strcmp(urlText, ledgeUrl.c_str()) == 0)
-					{
-						std::strcpy(urlText, ledgeUrl.c_str());
-					}
-				}
-
-				std::string sessionToken = LCU::Request("GET", "/lol-league-session/v1/league-session-token");
-				std::erase(sessionToken, '\"');
-
-				ledgeHeader += "Accept-Encoding: deflate, "/*gzip, */"zstd\r\n";
-				ledgeHeader += "user-agent: LeagueOfLegendsClient/" + LCU::league.version + "\r\n";
-				ledgeHeader += "Authorization: Bearer " + sessionToken + "\r\n";
-				ledgeHeader += "Content-type: application/json\r\n";
-				ledgeHeader += "Accept: application/json\r\n";
-
-				if (strlen(method) != 0)
-				{
-					std::strcpy(method, Utils::ToUpper(std::string(method)).c_str());
-				}
-
-				std::strcpy(inputPort, "443");
-				std::strcpy(inputHeader, ledgeHeader.c_str());
-			}
+				applyPreset(CustomRequestService::Preset::Ledge);
 
 			ImGui::Text("Header:");
-			ImGui::InputTextMultiline("##inputHeader", (inputHeader), IM_ARRAYSIZE(inputHeader), ImVec2(S.Window.width - 130.f,
-				(label_size.y + ImGui::GetStyle().FramePadding.y) * 6.f), ImGuiInputTextFlags_AllowTabInput);
-
-			S.customTab.port = inputPort;
-			S.customTab.header = inputHeader;
-
-			if (!S.customTab.port.empty())
-				customPort = std::stoi(S.customTab.port);
-			else
-				customPort = 443;
-
-			customHeader = S.customTab.header;
+			ImGui::InputTextMultiline("##inputHeader", inputHeader, IM_ARRAYSIZE(inputHeader),
+				ImVec2(S.Window.width - 130.f, (labelSize.y + ImGui::GetStyle().FramePadding.y) * 6.f),
+				ImGuiInputTextFlags_AllowTabInput);
 		}
-		else
-		{
-			isCustomOpen = false;
-			setLocalClient(useRiotClient, false);
-		}
+
+		S.customTab.method = method;
+		S.customTab.urlText = urlText;
+		S.customTab.requestText = requestText;
+		S.customTab.port = inputPort;
+		S.customTab.header = inputHeader;
 
 		ImGui::Columns(2, nullptr, false);
-
-		static std::string result;
 		if (ImGui::Button("Send custom request##customTab"))
 		{
-			auto sURL = std::string(urlText);
-			int requestPort = customPort;
-			std::string requestHeader = customHeader;
-			bool canSendRequest = true;
+			std::string port = inputPort;
+			std::string header = inputHeader;
+			std::string error;
 
-			if (!isCustomOpen)
+			if (!customConnectionOpen)
 			{
-				if (!setLocalClient(useRiotClient, false))
+				CustomRequestService::Connection connection;
+				const auto preset = useRiotClient
+					? CustomRequestService::Preset::Riot
+					: CustomRequestService::Preset::League;
+				if (!CustomRequestService::GetConnection(preset, connection, error))
+					result = error;
+				else
 				{
-					result = useRiotClient ? "Not connected to Riot Client" : "Not connected to League";
-					canSendRequest = false;
-				}
-				requestPort = customPort;
-				requestHeader = customHeader;
-			}
-
-			while (!sURL.empty() && (sURL[0] == ' ' || sURL[0] == '\n'))
-				sURL.erase(sURL.begin());
-
-			if (canSendRequest && sURL.empty())
-			{
-				result = "URL is empty";
-				canSendRequest = false;
-			}
-
-			if (canSendRequest)
-			{
-				const size_t schemeEnd = sURL.find("://");
-				const bool hasScheme = schemeEnd != std::string::npos;
-
-				if (!hasScheme)
-				{
-					if (!isCustomOpen || requestHeader.find("Host: 127.0.0.1") != std::string::npos)
-					{
-						if (sURL[0] != '/')
-							sURL.insert(0, "/");
-						sURL.insert(0, "https://127.0.0.1:" + std::to_string(requestPort));
-					}
-					else
-					{
-						result = "URL needs http:// or https:// when using a custom external header";
-						canSendRequest = false;
-					}
-				}
-				else if (requestPort != 443 && requestPort != 80)
-				{
-					const size_t hostStart = schemeEnd + strlen("://");
-					size_t hostEnd = sURL.find("/", hostStart);
-					if (hostEnd == std::string::npos)
-						hostEnd = sURL.size();
-
-					const std::string host = sURL.substr(hostStart, hostEnd - hostStart);
-					if (host.find(":") == std::string::npos)
-						sURL.insert(hostEnd, ":" + std::to_string(requestPort));
+					port = connection.port;
+					header = connection.header;
+					result = CustomRequestService::Send(method, urlText, requestText, port, header, error);
 				}
 			}
-
-			if (canSendRequest)
+			else
 			{
-				cpr::Session customSession;
-				customSession.SetVerifySsl(false);
-				customSession.SetHeader(Utils::StringToHeader(requestHeader));
-				customSession.SetBody(requestText);
-				customSession.SetUrl(sURL);
-
-				cpr::Response r;
-
-				const std::string upperMethod = Utils::ToUpper(method);
-				if (upperMethod == "GET")
-				{
-					r = customSession.Get();
-				}
-				else if (upperMethod == "POST")
-				{
-					r = customSession.Post();
-				}
-				else if (upperMethod == "OPTIONS")
-				{
-					r = customSession.Options();
-				}
-				else if (upperMethod == "DELETE")
-				{
-					r = customSession.Delete();
-				}
-				else if (upperMethod == "PUT")
-				{
-					r = customSession.Put();
-				}
-				else if (upperMethod == "HEAD")
-				{
-					r = customSession.Head();
-				}
-				else if (upperMethod == "PATCH")
-				{
-					r = customSession.Patch();
-				}
-
-				result = r.text;
+				result = CustomRequestService::Send(method, urlText, requestText, port, header, error);
 			}
+
+			if (!error.empty())
+				result = error;
+			else if (!result.empty() && !customConnectionOpen)
+				result = FormatJson(result);
 		}
 
 		ImGui::SameLine();
-
-		static Json::StreamWriterBuilder wBuilder;
-		static std::string sResultJson;
-		static char* cResultJson;
-
 		if (ImGui::Button("Format JSON##customTab"))
-		{
-			if (!sResultJson.empty())
-			{
-				Json::CharReaderBuilder builder;
-				const std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
-				JSONCPP_STRING err;
-				Json::Value root;
-				if (reader->parse(sResultJson.c_str(), sResultJson.c_str() + static_cast<int>(sResultJson.length()), &root, &err))
-				{
-					sResultJson = Json::writeString(wBuilder, root);
-				}
-			}
-		}
+			result = FormatJson(result);
 
 		ImGui::NextColumn();
-
 		ImGui::Text("Endpoints list:");
 		ImGui::TextURL("LCU", "https://lcu.kebs.dev", 1, 0);
 		ImGui::SameLine();
 		ImGui::Text(" | ");
 		ImGui::TextURL("Riot Client", "https://riotclient.kebs.dev", 1, 0);
-
 		ImGui::Columns(1);
 
 		if (!result.empty())
 		{
-			Json::CharReaderBuilder builder;
-			const std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
-			JSONCPP_STRING err;
-			Json::Value root;
-			if (!reader->parse(result.c_str(), result.c_str() + static_cast<int>(result.length()), &root, &err) || isCustomOpen)
-				sResultJson = result;
-			else
-			{
-				sResultJson = Json::writeString(wBuilder, root);
-			}
-			result = "";
-		}
-
-		if (!sResultJson.empty())
-		{
-			cResultJson = sResultJson.data();
-			ImGui::InputTextMultiline("##customResult", cResultJson, sResultJson.size() + 1, ImVec2(S.Window.width - 130.f,
-				(label_size.y + ImGui::GetStyle().FramePadding.y) * 19.f));
+			ImGui::InputTextMultiline("##customResult", result.data(), result.size() + 1,
+				ImVec2(S.Window.width - 130.f,
+					(labelSize.y + ImGui::GetStyle().FramePadding.y) * 19.f));
 		}
 	}
 
 	static void Invoke()
 	{
-		static bool once = true;
+		static bool initialized = false;
+		static char destination[1024] = {};
+		static char method[1024] = {};
+		static char args[1024 * 32] = {};
+		static std::string result;
 
-		static char destination[1024];
-		static char method[1024];
-		static char args[1024 * 32];
-
-		if (once)
+		if (!initialized)
 		{
-			once = false;
-			std::ranges::copy(S.invokeTab.destination, destination);
-			std::ranges::copy(S.invokeTab.method, method);
-			std::ranges::copy(S.invokeTab.args, args);
+			initialized = true;
+			CopyToBuffer(destination, S.invokeTab.destination);
+			CopyToBuffer(method, S.invokeTab.method);
+			CopyToBuffer(args, S.invokeTab.args);
 		}
 
 		ImGui::Text("Destination:");
@@ -408,52 +208,18 @@ public:
 		S.invokeTab.method = method;
 		S.invokeTab.args = args;
 
-		static std::string result;
 		if (ImGui::Button("Submit##submitInvoke"))
-		{
-			const std::string req = std::format("https://127.0.0.1/lol-login/v1/session/invoke?destination={0}&method={1}&args=[{2}]",
-				destination, method, args);
-			result = LCU::Request("POST", req, "");
-		}
+			result = FormatJson(CustomRequestService::Invoke(destination, method, args));
 
 		ImGui::Text("Result:");
 		ImGui::SameLine();
-
 		if (ImGui::Button("Copy to clipboard##invokeTab"))
-		{
 			Utils::CopyToClipboard(result);
-		}
-
-		static Json::StreamWriterBuilder wBuilder;
-		static std::string sResultJson;
-		static char* cResultJson;
 
 		if (!result.empty())
-		{
-			const Json::CharReaderBuilder builder;
-			const std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
-			JSONCPP_STRING err;
-			Json::Value root;
-			if (!reader->parse(result.c_str(), result.c_str() + static_cast<int>(result.length()), &root, &err))
-				sResultJson = result;
-			else
-			{
-				sResultJson = Json::writeString(wBuilder, root);
-			}
-			result = "";
-		}
-
-		if (!sResultJson.empty())
-		{
-			cResultJson = sResultJson.data();
-			ImGui::InputTextMultiline("##gameResult", cResultJson, sResultJson.size() + 1, ImVec2(600, 232));
-		}
+			ImGui::InputTextMultiline("##gameResult", result.data(), result.size() + 1, ImVec2(600, 232));
 	}
 
-private:
-	static inline bool onOpen = true;
-
-public:
 	static void Render()
 	{
 		if (ImGui::BeginTabItem("Custom"))
@@ -472,49 +238,23 @@ public:
 				}
 				ImGui::EndTabBar();
 			}
-
-			if (onOpen)
-				onOpen = false;
-
 			ImGui::EndTabItem();
-		}
-		else
-		{
-			onOpen = true;
 		}
 	}
 
 private:
-	static std::string GetLedgeUrl()
-	{
-		Json::CharReaderBuilder builder;
-		const std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
-		JSONCPP_STRING err;
-		Json::Value rootRegion;
-		std::string region;
-		std::string getRegion = LCU::Request("GET", "/riotclient/get_region_locale");
-		if (reader->parse(getRegion.c_str(), getRegion.c_str() + static_cast<int>(getRegion.length()), &rootRegion, &err))
-		{
-			region = rootRegion["webRegion"].asString();
-		}
+	static constexpr std::string_view LocalhostUrl = "https://127.0.0.1";
 
-		if (!region.empty())
-		{
-			std::ifstream systemYaml(S.leaguePath + "system.yaml");
-			std::string line;
-			while (std::getline(systemYaml, line))
-			{
-				if (line.find("league_edge_url: ") != std::string::npos
-					&& line.find(region) != std::string::npos)
-				{
-					std::string league_edge_url = line;
-					league_edge_url = league_edge_url.substr(league_edge_url.find("league_edge_url: ") + strlen("league_edge_url: "));
-					systemYaml.close();
-					return league_edge_url;
-				}
-			}
-			systemYaml.close();
-		}
-		return "";
+	template <size_t Size>
+	static void CopyToBuffer(char (&buffer)[Size], const std::string_view value)
+	{
+		const size_t copySize = (std::min)(value.size(), Size - 1);
+		std::memcpy(buffer, value.data(), copySize);
+		buffer[copySize] = '\0';
+	}
+
+	static std::string FormatJson(const std::string& value)
+	{
+		return JsonUtils::FormatOrRaw(value);
 	}
 };

@@ -206,9 +206,12 @@
     <ClCompile Include="League\Auth.cpp" />
     <ClCompile Include="League\ChampionLookup.cpp" />
     <ClCompile Include="League\ChampionService.cpp" />
+    <ClCompile Include="League\CustomRequestService.cpp" />
+    <ClCompile Include="League\GameService.cpp" />
     <ClCompile Include="League\LCU.cpp" />
     <ClCompile Include="League\LcuHttpClient.cpp" />
     <ClCompile Include="League\MiscService.cpp" />
+    <ClCompile Include="League\PlayerService.cpp" />
     <ClCompile Include="League\RiotId.cpp" />
     <ClCompile Include="League\RiotIdService.cpp" />
     <ClCompile Include="WebSocket\LcuWebSocket.cpp" />
@@ -237,9 +240,12 @@
     <ClInclude Include="League\base64.h" />
     <ClInclude Include="League\ChampionLookup.h" />
     <ClInclude Include="League\ChampionService.h" />
+    <ClInclude Include="League\CustomRequestService.h" />
+    <ClInclude Include="League\GameService.h" />
     <ClInclude Include="League\LCU.h" />
     <ClInclude Include="League\LcuHttpClient.h" />
     <ClInclude Include="League\MiscService.h" />
+    <ClInclude Include="League\PlayerService.h" />
     <ClInclude Include="League\RiotId.h" />
     <ClInclude Include="League\RiotIdService.h" />
     <ClInclude Include="UI\ChampsTab.h" />
